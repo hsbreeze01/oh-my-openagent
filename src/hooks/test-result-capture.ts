@@ -84,6 +84,12 @@ function buildTestResultGuidance(result: TestRunnerResult): string | null {
       parts.push("## AC Coverage: All Covered")
       parts.push(`All **${covered.length}** acceptance criteria have covering tests.`)
     }
+
+    // All ACs covered + all tests passed → Phase 3 verification
+    if (uncovered.length === 0 && result.status === "pass") {
+      parts.push("")
+      parts.push("> **Phase 3 ready**: All tests pass and all ACs are covered. Use the `tdd-verification` skill to execute four-layer closed-loop verification with Oracle cross-validation.")
+    }
   }
 
   return parts.length > 0 ? parts.join("\n") : null

@@ -83,3 +83,46 @@ Present the report to the user with a clear decision point:
 4. Ask a specific yes/no or multiple-choice question
 
 Do NOT proceed with implementation until the human makes a decision. Requirement problems cannot be solved by writing more code.
+
+## Momus Requirement-Review Delegation
+
+After generating the requirement problem report, delegate to Momus for independent requirement review. Use this exact prompt when delegating:
+
+```
+[MODE: requirement-review]
+
+SKEPTICISM BIAS: When in doubt, FLAG.
+
+Your normal APPROVAL BIAS is suspended for this review. You are reviewing REQUIREMENTS, not plans. Your job is to find problems in the requirements, not confirm they are fine.
+
+You MUST FLAG if:
+- Two ACs may be mutually exclusive in implementation (even if they "look" compatible)
+- An AC's performance/scale requirement may be infeasible under current architecture
+- An AC description admits multiple reasonable interpretations
+- Boundary scenarios exist that no AC covers but the PRD implicitly expects
+- The requirement problem report's diagnosis seems incomplete or incorrect
+
+Review the following requirement problem report and the original ACs:
+
+<insert requirement_problem_report here>
+
+<insert original AC list here>
+
+<insert original PRD paragraphs for affected ACs here>
+
+Output format:
+**[FLAGGED]** or **[NO_ADDITIONAL_ISSUES]**
+
+If FLAGGED:
+**Additional Issues** (max 3):
+1. [Specific issue with evidence]
+2. [Specific issue with evidence]
+3. [Specific issue with evidence]
+
+**Agreement with diagnosis**: [agree/disagree/partially — with explanation]
+```
+
+**Momus result handling:**
+- `FLAGGED` with additional issues → Merge Momus's findings into the requirement problem report before presenting to human
+- `NO_ADDITIONAL_ISSUES` → Present the original report to human
+- Momus disagrees with diagnosis → Re-evaluate the diagnosis before presenting to human
