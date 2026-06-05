@@ -42,6 +42,7 @@ import {
   createTaskUpdateTool,
   createHashlineEditTool,
   createConsensusTool,
+  createTestRunnerTool,
 } from "../tools"
 import { getMainSessionID } from "../features/claude-code-session-state"
 import { filterDisabledTools } from "../shared/disabled-tools"
@@ -69,6 +70,7 @@ type ToolRegistryFactories = {
   createTaskUpdateTool: typeof createTaskUpdateTool
   createHashlineEditTool: typeof createHashlineEditTool
   createConsensusTool: typeof createConsensusTool
+  createTestRunnerTool: typeof createTestRunnerTool
   createTeamApproveShutdownTool: typeof createTeamApproveShutdownTool
   createTeamCreateTool: typeof createTeamCreateTool
   createTeamDeleteTool: typeof createTeamDeleteTool
@@ -101,6 +103,7 @@ const defaultToolRegistryFactories: ToolRegistryFactories = {
   createTaskUpdateTool,
   createHashlineEditTool,
   createConsensusTool,
+  createTestRunnerTool,
   createTeamApproveShutdownTool,
   createTeamCreateTool,
   createTeamDeleteTool,
@@ -358,6 +361,7 @@ export function createToolRegistry(args: {
     ...taskToolsRecord,
     ...hashlineToolsRecord,
     ...consensusToolsRecord,
+    test_runner: factories.createTestRunnerTool(ctx),
   }
 
   const allToolNames = Object.keys(allTools)

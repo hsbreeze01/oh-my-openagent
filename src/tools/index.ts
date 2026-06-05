@@ -33,6 +33,7 @@ export {
 export { createHashlineEditTool } from "./hashline-edit"
 export { createConsensusTool } from "./consensus"
 export { createTeamSendMessageTool } from "../features/team-mode/tools/messaging"
+export { createTestRunnerTool } from "./test-runner"
 
 export function createBackgroundTools(manager: BackgroundManager, client: OpencodeClient): Record<string, ToolDefinition> {
   const outputManager: BackgroundOutputManager = manager
