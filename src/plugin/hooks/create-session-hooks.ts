@@ -27,6 +27,7 @@ import {
   createPreemptiveCompactionHook,
   createRuntimeFallbackHook,
   createLegacyPluginToastHook,
+  createTestResultCaptureHook,
 } from "../../hooks"
 import { createAnthropicEffortHook } from "../../hooks/anthropic-effort"
 import {
@@ -63,6 +64,7 @@ export type SessionHooks = {
   anthropicEffort: ReturnType<typeof createAnthropicEffortHook> | null
   runtimeFallback: ReturnType<typeof createRuntimeFallbackHook> | null
   legacyPluginToast: ReturnType<typeof createLegacyPluginToastHook> | null
+  testResultCapture: ReturnType<typeof createTestResultCaptureHook> | null
 }
 
 export function createSessionHooks(args: {
@@ -269,6 +271,10 @@ export function createSessionHooks(args: {
     ? safeHook("legacy-plugin-toast", () => createLegacyPluginToastHook(ctx))
     : null
 
+  const testResultCapture = isHookEnabled("test-result-capture")
+    ? safeHook("test-result-capture", () => createTestResultCaptureHook(ctx))
+    : null
+
   return {
     preemptiveCompaction,
     sessionRecovery,
@@ -293,5 +299,6 @@ export function createSessionHooks(args: {
     anthropicEffort,
     runtimeFallback,
     legacyPluginToast,
+    testResultCapture,
   }
 }

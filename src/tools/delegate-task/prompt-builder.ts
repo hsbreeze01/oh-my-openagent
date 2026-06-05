@@ -12,7 +12,13 @@ Additional requirements for this planning request:
 - Plan well for ultrawork execution.
 - Include a clear atomic commit strategy.`
 
-const TDD_LINE = "- Use TDD-oriented planning."
+const TDD_LINE = `- Use TDD-oriented planning:
+  1. Generate acceptance criteria from requirements (use prd-to-acceptance skill)
+  2. Generate tests from acceptance criteria (use test-generation skill)
+  3. Run tests with test_runner tool (verify_coverage=true)
+  4. If tests fail, analyze with failure-analysis skill
+  5. If requirement issues detected, use requirement-diagnosis skill
+  6. Repeat until all tests pass and all ACs are covered`
 
 function buildPlanAgentPromptAppend(tddEnabled: boolean): string {
   if (tddEnabled) {
