@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TDD Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0e17;
+    --bg-surface: #111827;
+    --bg-card: #1a2235;
+    --bg-elevated: #222d42;
+    --border: #2a3650;
+    --border-active: #3b82f6;
+    --text-primary: #e8ecf4;
+    --text-secondary: #8896b0;
+    --text-muted: #4a5a78;
+    --accent-blue: #3b82f6;
+    --accent-cyan: #06b6d4;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --accent-purple: #8b5cf6;
+    --glow-blue: rgba(59, 130, 246, 0.15);
+    --glow-green: rgba(16, 185, 129, 0.15);
+    --glow-amber: rgba(245, 158, 11, 0.12);
+    --glow-red: rgba(239, 68, 68, 0.12);
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Space Grotesk', sans-serif;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* === HEADER === */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    position: relative;
+    z-index: 10;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+    opacity: 0.4;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+  }
+
+  .logo span {
+    color: var(--accent-cyan);
+  }
+
+  .header-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--glow-blue);
+    color: var(--accent-blue);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    font-weight: 500;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .server-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+
+  .status-dot.connected {
+    background: var(--accent-green);
+    box-shadow: 0 0 8px var(--accent-green);
+  }
+
+  .status-dot.error {
+    background: var(--accent-red);
+    box-shadow: 0 0 8px var(--accent-red);
+  }
+
+  .settings-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+
+  .settings-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+  }
+
+  /* === MAIN LAYOUT === */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* === LEFT PANEL: STAGES === */
+  .stages-panel {
+    width: 240px;
+    min-width: 240px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .stages-header {
+    padding: 16px 20px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .stages-list {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stage-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .stage-item.active {
+    background: var(--glow-blue);
+  }
+
+  .stage-item.completed {
+    opacity: 0.7;
+  }
+
+  .stage-connector {
+    position: absolute;
+    left: 27px;
+    top: 36px;
+    width: 2px;
+    height: 16px;
+    background: var(--border);
+  }
+
+  .stage-item.completed .stage-connector {
+    background: var(--accent-green);
+  }
+
+  .stage-item:last-child .stage-connector {
+    display: none;
+  }
+
+  .stage-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: all 0.3s;
+    border: 2px solid var(--border);
+    background: var(--bg-deep);
+    color: var(--text-muted);
+  }
+
+  .stage-item.active .stage-icon {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    box-shadow: 0 0 12px var(--glow-blue);
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+
+  .stage-item.completed .stage-icon {
+    border-color: var(--accent-green);
+    background: var(--accent-green);
+    color: var(--bg-deep);
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  }
+
+  .stage-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: color 0.3s;
+  }
+
+  .stage-item.active .stage-label {
+    color: var(--text-primary);
+  }
+
+  .stage-item.completed .stage-label {
+    color: var(--accent-green);
+  }
+
+  .stage-time {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Agent Info */
+  .agent-info {
+    margin-top: auto;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .agent-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .agent-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .agent-model {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* === CENTER: EVENT LOG === */
+  .event-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-deep);
+  }
+
+  .event-header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-surface);
+  }
+
+  .event-header-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+
+  .event-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .event-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    scroll-behavior: smooth;
+  }
+
+  .event-log::-webkit-scrollbar { width: 6px; }
+  .event-log::-webkit-scrollbar-track { background: transparent; }
+  .event-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Event items */
+  .event-item {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 6px 10px;
+    border-radius: 4px;
+    animation: fade-in 0.2s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .event-item.agent-header {
+    color: var(--accent-cyan);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 10px 10px 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+
+  .event-item.thinking {
+    color: var(--text-muted);
+    font-style: italic;
+    padding-left: 16px;
+    border-left: 2px solid var(--text-muted);
+  }
+
+  .event-item.tool-call {
+    color: var(--accent-blue);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .event-item.tool-call .arrow {
+    color: var(--accent-cyan);
+    flex-shrink: 0;
+  }
+
+  .event-item.tool-result {
+    color: var(--text-secondary);
+    padding-left: 28px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .event-item.text-output {
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .event-item.error {
+    color: var(--accent-red);
+    background: var(--glow-red);
+    border-left: 3px solid var(--accent-red);
+  }
+
+  .event-item.success {
+    color: var(--accent-green);
+  }
+
+  .event-item.idle {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .event-item.todo-item {
+    padding-left: 16px;
+  }
+
+  .todo-done { color: var(--accent-green); }
+  .todo-progress { color: var(--accent-amber); }
+  .todo-pending { color: var(--text-muted); }
+
+  /* === BOTTOM: PRD INPUT === */
+  .input-panel {
+    border-top: 1px solid var(--border);
+    background: var(--bg-surface);
+    padding: 16px 24px;
+    position: relative;
+  }
+
+  .input-panel::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.3;
+  }
+
+  .input-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .input-tab {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .input-tab:hover {
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+  }
+
+  .input-tab.active {
+    background: var(--glow-blue);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+  }
+
+  .input-area {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  .prd-textarea {
+    flex: 1;
+    min-height: 80px;
+    max-height: 200px;
+    resize: vertical;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 12px;
+    line-height: 1.6;
+    transition: border-color 0.2s;
+  }
+
+  .prd-textarea:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px var(--glow-blue);
+  }
+
+  .prd-textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  .upload-zone {
+    display: none;
+    flex: 1;
+    min-height: 80px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  .upload-zone.visible {
+    display: flex;
+  }
+
+  .upload-zone.dragover {
+    border-color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.05);
+    color: var(--accent-cyan);
+  }
+
+  .submit-btn {
+    padding: 12px 24px;
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    height: fit-content;
+  }
+
+  .submit-btn:hover:not(:disabled) {
+    background: #2563eb;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  }
+
+  .submit-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* === SETTINGS MODAL === */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.visible {
+    display: flex;
+  }
+
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+  }
+
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .btn-secondary {
+    padding: 8px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .btn-primary {
+    padding: 8px 16px;
+    background: var(--accent-blue);
+    border: none;
+    color: white;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:hover {
+    background: #2563eb;
+  }
+
+  /* === EMPTY STATE === */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    gap: 12px;
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+
+  .empty-state-text {
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* Scrollbar for event log */
+  .event-log::-webkit-scrollbar { width: 6px; }
+  .event-log::-webkit-scrollbar-track { background: transparent; }
+  .event-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .event-log::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">TDD<span>.</span>Dashboard</div>
+    <div class="header-badge" id="sessionBadge">NO SESSION</div>
+  </div>
+  <div class="header-right">
+    <div class="server-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+    <button class="settings-btn" onclick="showSettings()">⚙ Config</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- LEFT: STAGES -->
+  <aside class="stages-panel">
+    <div class="stages-header">TDD Pipeline</div>
+    <div class="stages-list" id="stagesList">
+      <div class="stage-item" data-stage="prd">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">1</div>
+        <div class="stage-label">PRD Received</div>
+        <div class="stage-time" id="time-prd"></div>
+      </div>
+      <div class="stage-item" data-stage="ac">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">2</div>
+        <div class="stage-label">AC Generated</div>
+        <div class="stage-time" id="time-ac"></div>
+      </div>
+      <div class="stage-item" data-stage="test">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">3</div>
+        <div class="stage-label">Tests Written</div>
+        <div class="stage-time" id="time-test"></div>
+      </div>
+      <div class="stage-item" data-stage="impl">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">4</div>
+        <div class="stage-label">Implementing</div>
+        <div class="stage-time" id="time-impl"></div>
+      </div>
+      <div class="stage-item" data-stage="testing">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">5</div>
+        <div class="stage-label">Testing</div>
+        <div class="stage-time" id="time-testing"></div>
+      </div>
+      <div class="stage-item" data-stage="fixing">
+        <div class="stage-connector"></div>
+        <div class="stage-icon">6</div>
+        <div class="stage-label">Fixing</div>
+        <div class="stage-time" id="time-fixing"></div>
+      </div>
+      <div class="stage-item" data-stage="verified">
+        <div class="stage-icon">7</div>
+        <div class="stage-label">Verified</div>
+        <div class="stage-time" id="time-verified"></div>
+      </div>
+    </div>
+    <div class="agent-info" id="agentInfo" style="display:none">
+      <div class="agent-label">Current Agent</div>
+      <div class="agent-name" id="agentName">—</div>
+      <div class="agent-model" id="agentModel">—</div>
+    </div>
+  </aside>
+
+  <!-- CENTER: EVENT LOG -->
+  <div class="event-panel">
+    <div class="event-header">
+      <div class="event-header-title">Event Stream</div>
+      <div class="event-count" id="eventCount">0 events</div>
+    </div>
+    <div class="event-log" id="eventLog">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">⟐</div>
+        <div class="empty-state-text">Submit a PRD to start the TDD pipeline.<br>Events will appear here in real-time.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM: PRD INPUT -->
+<div class="input-panel">
+  <div class="input-tabs">
+    <button class="input-tab active" data-tab="text" onclick="switchTab('text')">📝 Paste PRD</button>
+    <button class="input-tab" data-tab="upload" onclick="switchTab('upload')">📎 Upload File</button>
+  </div>
+  <div class="input-area">
+    <textarea class="prd-textarea" id="prdTextarea" placeholder="Paste your PRD content here..."></textarea>
+    <div class="upload-zone" id="uploadZone">Drop .md file here or click to browse</div>
+    <button class="submit-btn" id="submitBtn" onclick="submitPRD()" disabled>▶ Start TDD</button>
+  </div>
+  <input type="file" id="fileInput" accept=".md,.txt,.markdown" style="display:none">
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-title">Connection Settings</div>
+    <div class="form-group">
+      <label class="form-label">OpenCode Server URL</label>
+      <input class="form-input" id="serverUrl" value="http://127.0.0.1:3001" placeholder="http://127.0.0.1:3001">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Project Directory</label>
+      <input class="form-input" id="projectDir" value="" placeholder="/path/to/project">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Auth Token (optional)</label>
+      <input class="form-input" id="authToken" value="" placeholder="Basic ...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Model Provider ID</label>
+      <input class="form-input" id="modelProvider" value="zhipuai" placeholder="zhipuai">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Model ID</label>
+      <input class="form-input" id="modelId" value="glm-5.1" placeholder="glm-5.1">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="hideSettings()">Cancel</button>
+      <button class="btn-primary" onclick="saveSettings()">Save & Connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  serverUrl: localStorage.getItem('tdd_server_url') || 'http://127.0.0.1:3001',
+  projectDir: localStorage.getItem('tdd_project_dir') || '',
+  authToken: localStorage.getItem('tdd_auth_token') || '',
+  modelProvider: localStorage.getItem('tdd_model_provider') || 'zhipuai',
+  modelId: localStorage.getItem('tdd_model_id') || 'glm-5.1',
+  sessionId: null,
+  connected: false,
+  eventSource: null,
+  eventCount: 0,
+  currentStage: null,
+  stageTimestamps: {},
+  currentAgent: null,
+  currentModel: null,
+  currentTool: null,
+  lastTestFailed: false,
+  partTypesById: {},
+  messageRoleById: {},
+  lastPartText: '',
+  lastReasoningText: '',
+  inThinkBlock: false,
+};
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('serverUrl').value = state.serverUrl;
+  document.getElementById('projectDir').value = state.projectDir;
+  document.getElementById('authToken').value = state.authToken;
+  document.getElementById('modelProvider').value = state.modelProvider;
+  document.getElementById('modelId').value = state.modelId;
+
+  // File upload handlers
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', e => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  // Textarea auto-enable submit
+  document.getElementById('prdTextarea').addEventListener('input', updateSubmitState);
+
+  // Try to connect
+  tryConnect();
+});
+
+// ============================================================
+// CONNECTION
+// ============================================================
+async function tryConnect() {
+  try {
+    const resp = await fetch(state.serverUrl + '/', {
+      headers: state.authToken ? { 'Authorization': state.authToken } : {},
+      signal: AbortSignal.timeout(3000),
+    });
+    if (resp.ok || resp.status === 200) {
+      setConnected(true);
+    } else {
+      setConnected(false);
+    }
+  } catch {
+    setConnected(false);
+  }
+}
+
+function setConnected(connected) {
+  state.connected = connected;
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  if (connected) {
+    dot.className = 'status-dot connected';
+    text.textContent = 'Connected';
+  } else {
+    dot.className = 'status-dot error';
+    text.textContent = 'Disconnected';
+  }
+  updateSubmitState();
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function showSettings() {
+  document.getElementById('settingsModal').classList.add('visible');
+}
+
+function hideSettings() {
+  document.getElementById('settingsModal').classList.remove('visible');
+}
+
+function saveSettings() {
+  state.serverUrl = document.getElementById('serverUrl').value.replace(/\/+$/, '');
+  state.projectDir = document.getElementById('projectDir').value;
+  state.authToken = document.getElementById('authToken').value;
+  state.modelProvider = document.getElementById('modelProvider').value;
+  state.modelId = document.getElementById('modelId').value;
+
+  localStorage.setItem('tdd_server_url', state.serverUrl);
+  localStorage.setItem('tdd_project_dir', state.projectDir);
+  localStorage.setItem('tdd_auth_token', state.authToken);
+  localStorage.setItem('tdd_model_provider', state.modelProvider);
+  localStorage.setItem('tdd_model_id', state.modelId);
+
+  hideSettings();
+  tryConnect();
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tab) {
+  document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+
+  const textarea = document.getElementById('prdTextarea');
+  const uploadZone = document.getElementById('uploadZone');
+
+  if (tab === 'text') {
+    textarea.style.display = '';
+    uploadZone.classList.remove('visible');
+  } else {
+    textarea.style.display = 'none';
+    uploadZone.classList.add('visible');
+  }
+}
+
+// ============================================================
+// FILE UPLOAD
+// ============================================================
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('prdTextarea').value = e.target.result;
+    switchTab('text');
+    updateSubmitState();
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// SUBMIT PRD
+// ============================================================
+function updateSubmitState() {
+  const btn = document.getElementById('submitBtn');
+  const hasContent = document.getElementById('prdTextarea').value.trim().length > 0;
+  btn.disabled = !state.connected || !hasContent;
+}
+
+async function submitPRD() {
+  const prdContent = document.getElementById('prdTextarea').value.trim();
+  if (!prdContent) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  try {
+    // Create session
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.authToken) headers['Authorization'] = state.authToken;
+
+    const sessionResp = await fetch(`${state.serverUrl}/session`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ directory: state.projectDir || undefined }),
+    });
+
+    if (!sessionResp.ok) throw new Error(`Create session failed: ${sessionResp.status}`);
+    const sessionData = await sessionResp.json();
+    state.sessionId = sessionData.id;
+
+    document.getElementById('sessionBadge').textContent = state.sessionId.slice(0, 8);
+
+    // Start SSE subscription
+    subscribeEvents();
+
+    // Send prompt with TDD instructions
+    const tddPrompt = `You must follow TDD approach strictly. Execute these steps IN ORDER using the exact skill commands:
+
+Step 1: Run /prd-to-acceptance to generate acceptance criteria from the PRD below
+Step 2: Run /test-generation to generate test files based on the acceptance criteria
+Step 3: Implement the code to make the tests pass
+Step 4: Run test_runner tool to execute all tests
+Step 5: If any tests fail, fix the code and re-run until all tests pass
+Step 6: Run /tdd-verification to verify the complete TDD cycle
+
+DO NOT skip any step. Start with Step 1 immediately.
+
+---PRD START---
+${prdContent}
+---PRD END---`;
+
+    const promptResp = await fetch(`${state.serverUrl}/session/${state.sessionId}/prompt_async`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        parts: [{ type: 'text', text: tddPrompt }],
+        model: { providerID: state.modelProvider, modelID: state.modelId },
+      }),
+    });
+
+    if (!promptResp.ok && promptResp.status !== 204) throw new Error(`Send prompt failed: ${promptResp.status}`);
+
+    // Update stage
+    setStage('prd');
+    addEvent('agent-header', `Sisyphus · starting TDD pipeline`);
+    addEvent('text-output', `PRD submitted (${prdContent.length} chars)`);
+
+  } catch (err) {
+    addEvent('error', `Submission failed: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = '▶ Start TDD';
+  }
+}
+
+// ============================================================
+// SSE SUBSCRIPTION
+// ============================================================
+function subscribeEvents() {
+  if (state.eventSource) {
+    state.eventSource.close();
+  }
+
+  const url = new URL(`${state.serverUrl}/event`);
+  if (state.projectDir) url.searchParams.set('directory', state.projectDir);
+
+  // EventSource doesn't support custom headers, use fetch-based SSE instead
+  fetchSSE(url.toString());
+}
+
+async function fetchSSE(url) {
+  const headers = {};
+  if (state.authToken) headers['Authorization'] = state.authToken;
+
+  try {
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error(`SSE connection failed: ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const payload = JSON.parse(line.slice(6));
+            handleEvent(payload);
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    if (state.sessionId) {
+      addEvent('error', `SSE error: ${err.message}`);
+    }
+  }
+}
+
+// ============================================================
+// EVENT HANDLING
+// ============================================================
+function handleEvent(payload) {
+  if (!payload?.type) return;
+
+  const props = payload.properties || {};
+
+  // Filter events by session ID (except global events)
+  const globalTypes = ['server.connected', 'server.heartbeat'];
+  if (!globalTypes.includes(payload.type)) {
+    const sid = props?.sessionID ?? props?.sessionId;
+    if (sid && state.sessionId && sid !== state.sessionId) return;
+  }
+
+  state.eventCount++;
+  document.getElementById('eventCount').textContent = `${state.eventCount} events`;
+
+  switch (payload.type) {
+    case 'server.connected':
+      setConnected(true);
+      break;
+    case 'server.heartbeat':
+      // keep-alive, no action needed
+      break;
+    case 'session.next.agent.switched':
+      handleAgentSwitched(props);
+      break;
+    case 'session.next.model.switched':
+      handleModelSwitched(props);
+      break;
+    case 'session.status':
+      handleSessionStatus(props);
+      break;
+    case 'session.idle':
+      handleSessionIdle(props);
+      break;
+    case 'session.error':
+      handleSessionError(props);
+      break;
+    case 'session.updated':
+      handleSessionUpdated(props);
+      break;
+    case 'session.diff':
+      handleSessionDiff(props);
+      break;
+    case 'message.updated':
+      handleMessageUpdated(props);
+      break;
+    case 'message.part.updated':
+      handleMessagePartUpdated(props);
+      break;
+    case 'message.part.delta':
+      handleMessagePartDelta(props);
+      break;
+    case 'tool.execute':
+      handleToolExecute(props);
+      break;
+    case 'tool.result':
+      handleToolResult(props);
+      break;
+  }
+}
+
+function handleAgentSwitched(props) {
+  const agent = props.agent;
+  if (agent && agent !== state.currentAgent) {
+    state.currentAgent = agent;
+    addEvent('agent-header', agent);
+    document.getElementById('agentName').textContent = agent;
+    document.getElementById('agentInfo').style.display = 'block';
+  }
+}
+
+function handleModelSwitched(props) {
+  const model = props.model;
+  if (model) {
+    const display = model.providerID ? `${model.providerID}` : (model.id || 'unknown');
+    state.currentModel = display;
+    addEvent('idle', `Model: ${display}`);
+    document.getElementById('agentModel').textContent = display;
+  }
+}
+
+function handleSessionStatus(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+  const statusType = props?.status?.type;
+  if (statusType === 'busy') {
+    setConnected(true);
+  }
+}
+
+function handleSessionIdle(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+  addEvent('idle', 'Session idle');
+}
+
+function handleSessionError(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+  const errMsg = typeof props?.error === 'string' ? props.error : (props?.error?.data?.message || JSON.stringify(props?.error));
+  addEvent('error', `Session error: ${errMsg}`);
+}
+
+function handleSessionUpdated(props) {
+  const info = props?.info;
+  if (!info) return;
+  const sid = info.sessionID ?? info.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  // Update title if available
+  if (info.title) {
+    document.getElementById('sessionBadge').textContent = info.title.slice(0, 20);
+  }
+
+  // Update token/cost info
+  if (info.tokens || info.cost) {
+    const tokens = info.tokens || {};
+    const cost = info.cost || 0;
+    const tokenInfo = `Tokens: ${tokens.input || 0}in/${tokens.output || 0}out | Cost: $${cost.toFixed(4)}`;
+    // Don't flood the log, just update a status area
+  }
+}
+
+function handleSessionDiff(props) {
+  const diff = props?.diff;
+  if (diff && diff.length > 0) {
+    addEvent('tool-call', `Diff: ${diff.length} change(s)`);
+  }
+}
+
+function handleMessageUpdated(props) {
+  const info = props?.info;
+  if (!info) return;
+  const sid = info.sessionID ?? info.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  if (info.id && info.role) {
+    state.messageRoleById[info.id] = info.role;
+  }
+
+  if (info.role !== 'assistant') return;
+
+  const agent = info.agent;
+  const modelObj = info.model;
+  const modelDisplay = modelObj ? (modelObj.providerID || modelObj.modelID || modelObj.id || 'unknown') : 'unknown';
+
+  if (agent !== state.currentAgent || modelDisplay !== state.currentModel) {
+    state.currentAgent = agent;
+    state.currentModel = modelDisplay;
+
+    const agentDisplay = agent || 'assistant';
+    addEvent('agent-header', `${agentDisplay} · ${modelDisplay}`);
+
+    document.getElementById('agentInfo').style.display = '';
+    document.getElementById('agentName').textContent = agentDisplay;
+    document.getElementById('agentModel').textContent = modelDisplay;
+  }
+
+  // Reset per-message state
+  state.lastPartText = '';
+  state.lastReasoningText = '';
+  state.inThinkBlock = false;
+}
+
+function handleMessagePartUpdated(props) {
+  const part = props?.part;
+  if (!part) return;
+  const sid = part.sessionID ?? props?.info?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  // Track part types
+  if (part.id && part.type) {
+    state.partTypesById[part.id] = part.type;
+  }
+
+  // Check role
+  const msgId = part.messageID;
+  const role = msgId ? state.messageRoleById[msgId] : undefined;
+  if (role === 'user') return;
+
+  // Handle step-start / step-finish
+  if (part.type === 'step-start') {
+    state.lastPartText = '';
+    state.inThinkBlock = false;
+    return;
+  }
+  if (part.type === 'step-finish') {
+    state.lastPartText = '';
+    state.inThinkBlock = false;
+    if (part.tokens) {
+      const t = part.tokens;
+      addEvent('idle', `Step done: ${t.input}in/${t.output}out tokens, $${(part.cost || 0).toFixed(4)}`);
+    }
+    return;
+  }
+
+  if (part.type === 'reasoning') {
+    if (!state.inThinkBlock) {
+      addEvent('thinking', '...');
+      state.inThinkBlock = true;
+    }
+    // Update last thinking text silently
+    state.lastReasoningText = part.text || '';
+    return;
+  }
+
+  state.inThinkBlock = false;
+
+  if (part.type === 'text' && part.text) {
+    const newText = part.text.slice(state.lastPartText.length);
+    if (newText) {
+      appendToLastTextEvent(newText);
+      state.lastPartText = part.text;
+    }
+  }
+
+  if (part.type === 'tool') {
+    const toolName = part.tool || part.name || 'unknown';
+    const status = part.state?.status;
+
+    if (status === 'running') {
+      const input = part.state?.input;
+      addToolCallEvent(toolName, input);
+      state.currentTool = toolName;
+    }
+
+    if (status === 'completed' || status === 'error') {
+      const output = part.state?.output || '';
+      if (output.trim()) {
+        addEvent('tool-result', output);
+      }
+      state.currentTool = null;
+      state.lastPartText = '';
+    }
+  }
+}
+
+function handleMessagePartDelta(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  const role = props?.messageID ? state.messageRoleById[props.messageID] : undefined;
+  if (role === 'user') return;
+
+  if (props?.field !== 'text') return;
+
+  const partType = props?.partID ? state.partTypesById[props.partID] : undefined;
+  const delta = props?.delta ?? '';
+  if (!delta) return;
+
+  if (partType === 'reasoning') {
+    // Silently accumulate, don't flood the log
+    state.lastReasoningText += delta;
+    return;
+  }
+
+  appendToLastTextEvent(delta);
+  state.lastPartText += delta;
+}
+
+function handleToolExecute(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  const toolName = props?.name || 'unknown';
+  addToolCallEvent(toolName, props?.input);
+  state.currentTool = toolName;
+
+  // Stage inference
+  inferStageFromTool(toolName, props?.input);
+}
+
+function handleToolResult(props) {
+  const sid = props?.sessionID ?? props?.sessionId;
+  if (sid && sid !== state.sessionId) return;
+
+  const toolName = props?.name || 'unknown';
+  const output = props?.output || '';
+
+  if (output.trim()) {
+    addEvent('tool-result', output);
+  }
+
+  // Check for test_runner failure
+  if (toolName === 'test_runner' || toolName === 'test-runner') {
+    if (output.includes('failed') || output.includes('FAIL') || output.includes('error')) {
+      state.lastTestFailed = true;
+    } else if (output.includes('passed') || output.includes('PASS') || output.includes('0 failed')) {
+      state.lastTestFailed = false;
+    }
+  }
+
+  state.currentTool = null;
+  state.lastPartText = '';
+}
+
+// ============================================================
+// STAGE INFERENCE
+// ============================================================
+function inferStageFromTool(toolName, input) {
+  const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
+
+  if (toolName === 'skill' || toolName === 'slashcommand') {
+    if (inputStr.includes('prd-to-acceptance')) {
+      setStage('ac');
+    } else if (inputStr.includes('test-generation')) {
+      setStage('test');
+    } else if (inputStr.includes('tdd-verification')) {
+      setStage('verified');
+    } else if (inputStr.includes('failure-analysis')) {
+      setStage('fixing');
+    }
+  } else if (toolName === 'test_runner' || toolName === 'test-runner') {
+    setStage('testing');
+  } else if (toolName === 'write' || toolName === 'edit' || toolName === 'hashline-edit') {
+    if (state.lastTestFailed) {
+      setStage('fixing');
+    } else if (state.currentStage === 'test' || state.currentStage === 'ac') {
+      setStage('impl');
+    }
+  }
+}
+
+function setStage(stage) {
+  if (state.currentStage === stage) return;
+
+  // Mark previous stages as completed
+  const stageOrder = ['prd', 'ac', 'test', 'impl', 'testing', 'fixing', 'verified'];
+  const newIdx = stageOrder.indexOf(stage);
+  const currentIdx = stageOrder.indexOf(state.currentStage);
+
+  // If going backwards (e.g. fixing after testing), don't un-complete
+  if (newIdx <= currentIdx && state.currentStage !== null) {
+    // Just update active
+  } else {
+    // Complete all stages before this one
+    for (let i = 0; i < newIdx; i++) {
+      completeStage(stageOrder[i]);
+    }
+  }
+
+  // Set active
+  state.currentStage = stage;
+  state.stageTimestamps[stage] = Date.now();
+
+  document.querySelectorAll('.stage-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  const activeEl = document.querySelector(`[data-stage="${stage}"]`);
+  if (activeEl) {
+    activeEl.classList.add('active');
+  }
+
+  const timeEl = document.getElementById(`time-${stage}`);
+  if (timeEl) {
+    timeEl.textContent = formatTime(Date.now());
+  }
+}
+
+function completeStage(stage) {
+  const el = document.querySelector(`[data-stage="${stage}"]`);
+  if (el && !el.classList.contains('completed')) {
+    el.classList.remove('active');
+    el.classList.add('completed');
+  }
+}
+
+// ============================================================
+// EVENT LOG RENDERING
+// ============================================================
+function addEvent(type, content) {
+  const log = document.getElementById('eventLog');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = `event-item ${type}`;
+  el.dataset.eventType = type;
+
+  if (type === 'tool-call') {
+    el.innerHTML = `<span class="arrow">→</span><span>${escapeHtml(content)}</span>`;
+  } else {
+    el.textContent = content;
+  }
+
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+function addToolCallEvent(toolName, input) {
+  const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
+  let display = toolName;
+
+  // Extract meaningful description from input
+  if (toolName === 'read' || toolName === 'grep' || toolName === 'glob') {
+    const path = input?.path || input?.pattern || input?.query || '';
+    if (path) display = `${toolName} ${path}`;
+  } else if (toolName === 'write' || toolName === 'edit') {
+    const path = input?.path || input?.file_path || '';
+    if (path) display = `${toolName} ${path}`;
+  } else if (toolName === 'skill' || toolName === 'slashcommand') {
+    const skillName = input?.name || input?.skill || '';
+    if (skillName) display = `Skill "${skillName}"`;
+  } else if (toolName === 'test_runner' || toolName === 'test-runner') {
+    display = 'test_runner';
+  } else if (toolName === 'delegate-task') {
+    display = 'delegate-task';
+  }
+
+  addEvent('tool-call', display);
+}
+
+function appendToLastTextEvent(delta) {
+  const log = document.getElementById('eventLog');
+  const lastEl = log.lastElementChild;
+  if (lastEl && (lastEl.dataset.eventType === 'text-output')) {
+    lastEl.textContent += delta;
+    log.scrollTop = log.scrollHeight;
+  } else {
+    addEvent('text-output', delta);
+  }
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+</script>
+</body>
+</html>
