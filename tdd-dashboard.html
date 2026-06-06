@@ -393,6 +393,53 @@
     flex-shrink: 0;
   }
 
+  .stage-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    color: #fff;
+  }
+
+  .badge-prd { background: #6b7280; }
+  .badge-ac { background: #8b5cf6; }
+  .badge-test { background: #3b82f6; }
+  .badge-impl { background: #f59e0b; color: #000; }
+  .badge-testing { background: #06b6d4; }
+  .badge-fixing { background: #ef4444; }
+  .badge-verified { background: #10b981; }
+
+  .agent-icon {
+    color: var(--accent-cyan);
+    margin-right: 4px;
+  }
+
+  .stage-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    margin: 4px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .stage-divider-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #fff;
+  }
+
+  .stage-divider-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
   .event-item.tool-result {
     color: var(--text-secondary);
     padding-left: 28px;
@@ -1319,6 +1366,8 @@ function handleMessagePartUpdated(props) {
     if (newText) {
       appendToLastTextEvent(newText);
       state.lastPartText = part.text;
+      // Stage inference from text content
+      inferStageFromText(part.text);
     }
   }
 
@@ -1330,6 +1379,8 @@ function handleMessagePartUpdated(props) {
       const input = part.state?.input;
       addToolCallEvent(toolName, input);
       state.currentTool = toolName;
+      // Stage inference from tool execution
+      inferStageFromTool(toolName, input);
     }
 
     if (status === 'completed' || status === 'error') {
@@ -1337,6 +1388,8 @@ function handleMessagePartUpdated(props) {
       if (output.trim()) {
         addEvent('tool-result', output);
       }
+      // Stage inference from tool result
+      inferStageFromToolResult(toolName, output);
       state.currentTool = null;
       state.lastPartText = '';
     }
@@ -1389,14 +1442,8 @@ function handleToolResult(props) {
     addEvent('tool-result', output);
   }
 
-  // Check for test_runner failure
-  if (toolName === 'test_runner' || toolName === 'test-runner') {
-    if (output.includes('failed') || output.includes('FAIL') || output.includes('error')) {
-      state.lastTestFailed = true;
-    } else if (output.includes('passed') || output.includes('PASS') || output.includes('0 failed')) {
-      state.lastTestFailed = false;
-    }
-  }
+  // Stage inference from tool result
+  inferStageFromToolResult(toolName, output);
 
   state.currentTool = null;
   state.lastPartText = '';
@@ -1405,6 +1452,14 @@ function handleToolResult(props) {
 // ============================================================
 // STAGE INFERENCE
 // ============================================================
+
+// Stage order definition
+const STAGE_ORDER = ['prd', 'ac', 'test', 'impl', 'testing', 'fixing', 'verified'];
+
+// Track text-based stage inference to avoid flickering
+let lastTextInferenceTime = 0;
+const TEXT_INFERENCE_DEBOUNCE = 2000;
+
 function inferStageFromTool(toolName, input) {
   const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
 
@@ -1417,14 +1472,133 @@ function inferStageFromTool(toolName, input) {
       setStage('verified');
     } else if (inputStr.includes('failure-analysis')) {
       setStage('fixing');
+    } else if (inputStr.includes('requirement-diagnosis')) {
+      setStage('fixing');
     }
   } else if (toolName === 'test_runner' || toolName === 'test-runner') {
     setStage('testing');
+  } else if (toolName === 'bash' || toolName === 'shell' || toolName === 'terminal') {
+    // Running tests via shell
+    if (inputStr.includes('pytest') || inputStr.includes('jest') || inputStr.includes('vitest') ||
+        inputStr.includes('go test') || inputStr.includes('cargo test') || inputStr.includes('npm test')) {
+      setStage('testing');
+    } else if (state.currentStage === 'test' || state.currentStage === 'ac') {
+      // Shell command after test generation = likely implementing
+      setStage('impl');
+    }
   } else if (toolName === 'write' || toolName === 'edit' || toolName === 'hashline-edit') {
     if (state.lastTestFailed) {
       setStage('fixing');
     } else if (state.currentStage === 'test' || state.currentStage === 'ac') {
       setStage('impl');
+    }
+  } else if (toolName === 'read' || toolName === 'grep' || toolName === 'glob') {
+    // Read/grep/glob after test stage = likely implementing (reading code to fix)
+    if (state.currentStage === 'test') {
+      setStage('impl');
+    }
+  }
+}
+
+function inferStageFromToolResult(toolName, output) {
+  const outputStr = String(output || '');
+
+  // Check for test results
+  if (toolName === 'test_runner' || toolName === 'test-runner' ||
+      toolName === 'bash' || toolName === 'shell' || toolName === 'terminal') {
+    if (outputStr.includes('failed') || outputStr.includes('FAIL') || outputStr.includes('ERROR')) {
+      // Only mark as failed if there are actual failures (not just "0 failed")
+      if (!outputStr.includes('0 failed') && !outputStr.includes('0 failures')) {
+        state.lastTestFailed = true;
+        setStage('fixing');
+      } else {
+        state.lastTestFailed = false;
+      }
+    } else if (outputStr.includes('passed') || outputStr.includes('PASS') ||
+               outputStr.includes('0 failed') || outputStr.includes('0 failures')) {
+      state.lastTestFailed = false;
+    }
+  }
+}
+
+function inferStageFromText(text) {
+  if (!text || text.length < 20) return;
+
+  // Debounce text-based inference
+  const now = Date.now();
+  if (now - lastTextInferenceTime < TEXT_INFERENCE_DEBOUNCE) return;
+
+  const lower = text.toLowerCase();
+
+  // Only infer forward, never backward via text
+  const currentIdx = STAGE_ORDER.indexOf(state.currentStage);
+
+  // AC generation keywords
+  if (currentIdx < STAGE_ORDER.indexOf('ac')) {
+    if (lower.includes('acceptance criteria') || lower.includes('验收标准') ||
+        lower.includes('ac-0') || lower.includes('generating acceptance') ||
+        lower.includes('prd-to-acceptance')) {
+      lastTextInferenceTime = now;
+      setStage('ac');
+      return;
+    }
+  }
+
+  // Test generation keywords
+  if (currentIdx < STAGE_ORDER.indexOf('test')) {
+    if (lower.includes('test generation') || lower.includes('generating test') ||
+        lower.includes('test case') || lower.includes('test_') ||
+        lower.includes('pytest') || lower.includes('writing test') ||
+        lower.includes('test-generation')) {
+      lastTextInferenceTime = now;
+      setStage('test');
+      return;
+    }
+  }
+
+  // Implementation keywords
+  if (currentIdx < STAGE_ORDER.indexOf('impl')) {
+    if (lower.includes('implementing') || lower.includes('implementation') ||
+        lower.includes('implement the') || lower.includes('writing the code') ||
+        lower.includes('now implement') || lower.includes('let me implement') ||
+        lower.includes('creating the') && lower.includes('module')) {
+      lastTextInferenceTime = now;
+      setStage('impl');
+      return;
+    }
+  }
+
+  // Testing keywords
+  if (currentIdx < STAGE_ORDER.indexOf('testing')) {
+    if ((lower.includes('running test') || lower.includes('executing test') ||
+         lower.includes('running all test') || lower.includes('test result') ||
+         lower.includes('test pass') || lower.includes('test fail')) &&
+        !lower.includes('generating test')) {
+      lastTextInferenceTime = now;
+      setStage('testing');
+      return;
+    }
+  }
+
+  // Fixing keywords
+  if (currentIdx < STAGE_ORDER.indexOf('fixing') && state.currentStage !== 'verified') {
+    if (lower.includes('fixing the') || lower.includes('fix the failing') ||
+        lower.includes('test still fails') || lower.includes('correcting the') ||
+        lower.includes('failure-analysis') || lower.includes('root cause')) {
+      lastTextInferenceTime = now;
+      setStage('fixing');
+      return;
+    }
+  }
+
+  // Verification keywords
+  if (currentIdx < STAGE_ORDER.indexOf('verified')) {
+    if (lower.includes('tdd verification') || lower.includes('all tests pass') ||
+        lower.includes('verification complete') || lower.includes('tdd-verification') ||
+        lower.includes('four-layer verification') || lower.includes('closed-loop verified')) {
+      lastTextInferenceTime = now;
+      setStage('verified');
+      return;
     }
   }
 }
@@ -1432,24 +1606,37 @@ function inferStageFromTool(toolName, input) {
 function setStage(stage) {
   if (state.currentStage === stage) return;
 
-  // Mark previous stages as completed
-  const stageOrder = ['prd', 'ac', 'test', 'impl', 'testing', 'fixing', 'verified'];
-  const newIdx = stageOrder.indexOf(stage);
-  const currentIdx = stageOrder.indexOf(state.currentStage);
+  const newIdx = STAGE_ORDER.indexOf(stage);
+  const currentIdx = STAGE_ORDER.indexOf(state.currentStage);
 
-  // If going backwards (e.g. fixing after testing), don't un-complete
+  // Special handling for backward transitions (testing → fixing → testing)
+  // These are valid TDD cycles, don't un-complete previous stages
   if (newIdx <= currentIdx && state.currentStage !== null) {
-    // Just update active
+    // For fixing → testing cycle, just update active stage
+    if ((state.currentStage === 'fixing' && stage === 'testing') ||
+        (state.currentStage === 'testing' && stage === 'fixing')) {
+      // Keep all stages up to 'impl' completed
+    } else if (state.currentStage === 'verified' && stage === 'fixing') {
+      // Verification found issues, go back to fixing
+      // Un-complete verified
+      uncompleteStage('verified');
+    } else {
+      // Don't go backwards for other cases
+      return;
+    }
   } else {
     // Complete all stages before this one
     for (let i = 0; i < newIdx; i++) {
-      completeStage(stageOrder[i]);
+      completeStage(STAGE_ORDER[i]);
     }
   }
 
   // Set active
   state.currentStage = stage;
   state.stageTimestamps[stage] = Date.now();
+
+  // Add stage transition divider in event log
+  addStageDivider(stage);
 
   document.querySelectorAll('.stage-item').forEach(el => {
     el.classList.remove('active');
@@ -1473,6 +1660,13 @@ function completeStage(stage) {
   }
 }
 
+function uncompleteStage(stage) {
+  const el = document.querySelector(`[data-stage="${stage}"]`);
+  if (el) {
+    el.classList.remove('completed');
+  }
+}
+
 // ============================================================
 // EVENT LOG RENDERING
 // ============================================================
@@ -1485,12 +1679,56 @@ function addEvent(type, content) {
   el.className = `event-item ${type}`;
   el.dataset.eventType = type;
 
+  // Add stage badge if we have a current stage
+  const stageLabel = state.currentStage ? getStageLabel(state.currentStage) : null;
+
   if (type === 'tool-call') {
-    el.innerHTML = `<span class="arrow">→</span><span>${escapeHtml(content)}</span>`;
+    if (stageLabel) {
+      el.innerHTML = `<span class="stage-badge badge-${state.currentStage}">${stageLabel}</span><span class="arrow">→</span><span>${escapeHtml(content)}</span>`;
+    } else {
+      el.innerHTML = `<span class="arrow">→</span><span>${escapeHtml(content)}</span>`;
+    }
+  } else if (type === 'agent-header') {
+    el.innerHTML = `<span class="agent-icon">●</span><span>${escapeHtml(content)}</span>`;
   } else {
     el.textContent = content;
   }
 
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+function getStageLabel(stage) {
+  const labels = {
+    'prd': 'PRD',
+    'ac': 'AC',
+    'test': 'TEST',
+    'impl': 'IMPL',
+    'testing': 'RUN',
+    'fixing': 'FIX',
+    'verified': '✓',
+  };
+  return labels[stage] || stage;
+}
+
+function addStageDivider(stage) {
+  const log = document.getElementById('eventLog');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = 'stage-divider';
+  const label = getStageLabel(stage);
+  const fullLabels = {
+    'prd': 'PRD Received',
+    'ac': 'Generating Acceptance Criteria',
+    'test': 'Generating Tests',
+    'impl': 'Implementing Code',
+    'testing': 'Running Tests',
+    'fixing': 'Fixing Failures',
+    'verified': 'TDD Verified',
+  };
+  el.innerHTML = `<span class="stage-divider-badge badge-${stage}">${label}</span><span class="stage-divider-text">${fullLabels[stage] || stage}</span>`;
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
 }
