@@ -798,9 +798,15 @@
         <div class="stage-time" id="time-fixing"></div>
       </div>
       <div class="stage-item" data-stage="verified">
+        <div class="stage-connector"></div>
         <div class="stage-icon">7</div>
         <div class="stage-label">Verified</div>
         <div class="stage-time" id="time-verified"></div>
+      </div>
+      <div class="stage-item" data-stage="completed">
+        <div class="stage-icon">8</div>
+        <div class="stage-label">Completed</div>
+        <div class="stage-time" id="time-completed"></div>
       </div>
     </div>
     <div class="agent-info" id="agentInfo" style="display:none">
@@ -835,6 +841,7 @@
     <textarea class="prd-textarea" id="prdTextarea" placeholder="Paste your PRD content here..."></textarea>
     <div class="upload-zone" id="uploadZone">Drop .md file here or click to browse</div>
     <button class="submit-btn" id="submitBtn" onclick="submitPRD()" disabled>▶ Start TDD</button>
+    <button class="submit-btn" id="diagBtn" onclick="runDiagnostics()" style="background:var(--bg-elevated);font-size:0.8em;margin-top:4px">🔍 Diagnose Current Session</button>
   </div>
   <input type="file" id="fileInput" accept=".md,.txt,.markdown" style="display:none">
 </div>
@@ -845,7 +852,7 @@
     <div class="modal-title">Connection Settings</div>
     <div class="form-group">
       <label class="form-label">OpenCode Server URL</label>
-      <input class="form-input" id="serverUrl" value="http://127.0.0.1:3001" placeholder="http://127.0.0.1:3001">
+      <input class="form-input" id="serverUrl" value="http://127.0.0.1:8080" placeholder="http://127.0.0.1:8080">
     </div>
     <div class="form-group">
       <label class="form-label">Project Directory</label>
@@ -875,7 +882,7 @@
 // STATE
 // ============================================================
 const state = {
-  serverUrl: localStorage.getItem('tdd_server_url') || 'http://127.0.0.1:3001',
+  serverUrl: localStorage.getItem('tdd_server_url') || 'http://127.0.0.1:8080',
   projectDir: localStorage.getItem('tdd_project_dir') || '',
   authToken: localStorage.getItem('tdd_auth_token') || '',
   modelProvider: localStorage.getItem('tdd_model_provider') || 'zhipuai',
@@ -895,6 +902,8 @@ const state = {
   lastPartText: '',
   lastReasoningText: '',
   inThinkBlock: false,
+  childSessionIds: new Set(),  // Track child (subagent) sessions
+  parentSessionId: null,       // The main session created by PRD submission
 };
 
 // ============================================================
@@ -1045,15 +1054,25 @@ async function submitPRD() {
     const headers = { 'Content-Type': 'application/json' };
     if (state.authToken) headers['Authorization'] = state.authToken;
 
-    const sessionResp = await fetch(`${state.serverUrl}/session`, {
+    // Create session - directory goes in query param, model in body
+    const sessionUrl = new URL(`${state.serverUrl}/session`);
+    if (state.projectDir) sessionUrl.searchParams.set('directory', state.projectDir);
+
+    const sessionResp = await fetch(sessionUrl.toString(), {
       method: 'POST',
       headers,
-      body: JSON.stringify({ directory: state.projectDir || undefined }),
+      body: JSON.stringify({
+        model: { id: state.modelId, providerID: state.modelProvider, variant: 'default' },
+      }),
     });
 
-    if (!sessionResp.ok) throw new Error(`Create session failed: ${sessionResp.status}`);
+    if (!sessionResp.ok) {
+      const errBody = await sessionResp.text().catch(() => '');
+      throw new Error(`Create session failed: ${sessionResp.status} ${errBody}`);
+    }
     const sessionData = await sessionResp.json();
     state.sessionId = sessionData.id;
+    state.parentSessionId = sessionData.id;  // Track the main session as parent
 
     document.getElementById('sessionBadge').textContent = state.sessionId.slice(0, 8);
 
@@ -1076,16 +1095,22 @@ DO NOT skip any step. Start with Step 1 immediately.
 ${prdContent}
 ---PRD END---`;
 
-    const promptResp = await fetch(`${state.serverUrl}/session/${state.sessionId}/prompt_async`, {
+    const promptUrl = new URL(`${state.serverUrl}/session/${state.sessionId}/prompt_async`);
+    if (state.projectDir) promptUrl.searchParams.set('directory', state.projectDir);
+
+    const promptResp = await fetch(promptUrl.toString(), {
       method: 'POST',
       headers,
       body: JSON.stringify({
         parts: [{ type: 'text', text: tddPrompt }],
-        model: { providerID: state.modelProvider, modelID: state.modelId },
+        model: { modelID: state.modelId, providerID: state.modelProvider, variant: 'default' },
       }),
     });
 
-    if (!promptResp.ok && promptResp.status !== 204) throw new Error(`Send prompt failed: ${promptResp.status}`);
+    if (!promptResp.ok && promptResp.status !== 204) {
+      const errBody = await promptResp.text().catch(() => '');
+      throw new Error(`Send prompt failed: ${promptResp.status} ${errBody}`);
+    }
 
     // Update stage
     setStage('prd');
@@ -1110,6 +1135,8 @@ function subscribeEvents() {
   const url = new URL(`${state.serverUrl}/event`);
   if (state.projectDir) url.searchParams.set('directory', state.projectDir);
 
+  addEvent('idle', `Connecting SSE to ${url.toString()}...`);
+  console.log('[TDD] SSE connecting to:', url.toString());
   // EventSource doesn't support custom headers, use fetch-based SSE instead
   fetchSSE(url.toString());
 }
@@ -1119,8 +1146,11 @@ async function fetchSSE(url) {
   if (state.authToken) headers['Authorization'] = state.authToken;
 
   try {
-    const resp = await fetch(url, { headers });
+    const resp = await fetch(url, { headers, mode: 'cors' });
     if (!resp.ok) throw new Error(`SSE connection failed: ${resp.status}`);
+
+    setConnected(true);
+    addEvent('idle', `SSE connected to ${url}`);
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -1143,27 +1173,89 @@ async function fetchSSE(url) {
         }
       }
     }
+
+    // Stream ended normally - reconnect after delay
+    setConnected(false);
+    addEvent('idle', 'SSE stream ended, reconnecting in 3s...');
+    setTimeout(() => fetchSSE(url), 3000);
   } catch (err) {
-    if (state.sessionId) {
-      addEvent('error', `SSE error: ${err.message}`);
-    }
+    setConnected(false);
+    addEvent('error', `SSE error: ${err.message}, retrying in 5s...`);
+    setTimeout(() => fetchSSE(url), 5000);
   }
 }
 
 // ============================================================
 // EVENT HANDLING
 // ============================================================
+// Cache of sessionIDs that are known to NOT be child sessions (to avoid repeated API calls)
+const nonChildSessionIds = new Set();
+
+// Async check: is this session a child of our parent session?
+async function checkIsChildSession(sid) {
+  if (!sid || !state.parentSessionId) return false;
+  if (state.childSessionIds.has(sid)) return true;
+  if (nonChildSessionIds.has(sid)) return false;
+  try {
+    const resp = await fetch(`${state.serverUrl}/session/${sid}`, {
+      headers: state.authToken ? { 'Authorization': state.authToken } : {},
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    const session = data.data || data;
+    const parentId = session.parentID || session.parent_id || session.parentId;
+    console.log('[TDD] checkIsChildSession:', sid, 'parentId:', parentId, 'expected:', state.parentSessionId, 'keys:', Object.keys(session).join(','));
+    if (parentId === state.parentSessionId) {
+      state.childSessionIds.add(sid);
+      const title = session.title || 'unknown subagent';
+      addEvent('agent-header', `Child session detected: ${title.slice(0, 50)}`);
+      return true;
+    }
+    nonChildSessionIds.add(sid);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function handleEvent(payload) {
   if (!payload?.type) return;
 
   const props = payload.properties || {};
 
   // Filter events by session ID (except global events)
+  // Allow events from parent session AND any child (subagent) sessions
   const globalTypes = ['server.connected', 'server.heartbeat'];
   if (!globalTypes.includes(payload.type)) {
-    const sid = props?.sessionID ?? props?.sessionId;
-    if (sid && state.sessionId && sid !== state.sessionId) return;
+    // Try to get sessionID from multiple locations (matching opencode SDK's getSessionID)
+    let sid = props?.sessionID ?? props?.sessionId;
+    if (!sid && props?.info) {
+      sid = props.info.sessionID ?? props.info.sessionId;
+    }
+    if (!sid && props?.part) {
+      sid = props.part.sessionID ?? props.part.sessionId;
+    }
+
+    if (sid && state.parentSessionId && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) {
+      // Also check nonChildSessionIds to avoid repeated API calls
+      if (nonChildSessionIds.has(sid)) return;
+
+      // Unknown session - check async if it's a child, and buffer the event
+      checkIsChildSession(sid).then(isChild => {
+        if (isChild) {
+          processEvent(payload);
+        }
+      });
+      return; // Don't process yet - will be re-processed if it's a child
+    }
   }
+
+  processEvent(payload);
+}
+
+function processEvent(payload) {
+  const props = payload.properties || {};
 
   state.eventCount++;
   document.getElementById('eventCount').textContent = `${state.eventCount} events`;
@@ -1227,7 +1319,7 @@ function handleAgentSwitched(props) {
 function handleModelSwitched(props) {
   const model = props.model;
   if (model) {
-    const display = model.providerID ? `${model.providerID}` : (model.id || 'unknown');
+    const display = model.id ? `${model.providerID}/${model.id}` : (model.providerID || 'unknown');
     state.currentModel = display;
     addEvent('idle', `Model: ${display}`);
     document.getElementById('agentModel').textContent = display;
@@ -1236,7 +1328,7 @@ function handleModelSwitched(props) {
 
 function handleSessionStatus(props) {
   const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  if (sid && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) return;
   const statusType = props?.status?.type;
   if (statusType === 'busy') {
     setConnected(true);
@@ -1245,13 +1337,13 @@ function handleSessionStatus(props) {
 
 function handleSessionIdle(props) {
   const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  if (sid && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) return;
   addEvent('idle', 'Session idle');
 }
 
 function handleSessionError(props) {
   const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  if (sid && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) return;
   const errMsg = typeof props?.error === 'string' ? props.error : (props?.error?.data?.message || JSON.stringify(props?.error));
   addEvent('error', `Session error: ${errMsg}`);
 }
@@ -1260,7 +1352,7 @@ function handleSessionUpdated(props) {
   const info = props?.info;
   if (!info) return;
   const sid = info.sessionID ?? info.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  if (sid && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) return;
 
   // Update title if available
   if (info.title) {
@@ -1286,8 +1378,8 @@ function handleSessionDiff(props) {
 function handleMessageUpdated(props) {
   const info = props?.info;
   if (!info) return;
-  const sid = info.sessionID ?? info.sessionId;
-  if (sid && sid !== state.sessionId) return;
+
+  // Session filtering is already handled in handleEvent/processEvent
 
   if (info.id && info.role) {
     state.messageRoleById[info.id] = info.role;
@@ -1297,7 +1389,7 @@ function handleMessageUpdated(props) {
 
   const agent = info.agent;
   const modelObj = info.model;
-  const modelDisplay = modelObj ? (modelObj.providerID || modelObj.modelID || modelObj.id || 'unknown') : 'unknown';
+  const modelDisplay = modelObj ? (modelObj.id ? `${modelObj.providerID}/${modelObj.id}` : (modelObj.providerID || 'unknown')) : 'unknown';
 
   if (agent !== state.currentAgent || modelDisplay !== state.currentModel) {
     state.currentAgent = agent;
@@ -1320,8 +1412,9 @@ function handleMessageUpdated(props) {
 function handleMessagePartUpdated(props) {
   const part = props?.part;
   if (!part) return;
-  const sid = part.sessionID ?? props?.info?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+
+  // Session filtering is already handled in handleEvent/processEvent
+  // No need to re-filter here
 
   // Track part types
   if (part.id && part.type) {
@@ -1374,9 +1467,9 @@ function handleMessagePartUpdated(props) {
   if (part.type === 'tool') {
     const toolName = part.tool || part.name || 'unknown';
     const status = part.state?.status;
+    const input = part.state?.input;
 
-    if (status === 'running') {
-      const input = part.state?.input;
+    if (status === 'pending' || status === 'running') {
       addToolCallEvent(toolName, input);
       state.currentTool = toolName;
       // Stage inference from tool execution
@@ -1390,6 +1483,10 @@ function handleMessagePartUpdated(props) {
       }
       // Stage inference from tool result
       inferStageFromToolResult(toolName, output);
+      // Fallback: also try to infer stage from input if we missed the running event
+      if (input && state.currentStage) {
+        inferStageFromTool(toolName, input);
+      }
       state.currentTool = null;
       state.lastPartText = '';
     }
@@ -1397,8 +1494,7 @@ function handleMessagePartUpdated(props) {
 }
 
 function handleMessagePartDelta(props) {
-  const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  // Session filtering is already handled in handleEvent/processEvent
 
   const role = props?.messageID ? state.messageRoleById[props.messageID] : undefined;
   if (role === 'user') return;
@@ -1420,8 +1516,7 @@ function handleMessagePartDelta(props) {
 }
 
 function handleToolExecute(props) {
-  const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  // Session filtering is already handled in handleEvent/processEvent
 
   const toolName = props?.name || 'unknown';
   addToolCallEvent(toolName, props?.input);
@@ -1432,8 +1527,7 @@ function handleToolExecute(props) {
 }
 
 function handleToolResult(props) {
-  const sid = props?.sessionID ?? props?.sessionId;
-  if (sid && sid !== state.sessionId) return;
+  // Session filtering is already handled in handleEvent/processEvent
 
   const toolName = props?.name || 'unknown';
   const output = props?.output || '';
@@ -1454,11 +1548,235 @@ function handleToolResult(props) {
 // ============================================================
 
 // Stage order definition
-const STAGE_ORDER = ['prd', 'ac', 'test', 'impl', 'testing', 'fixing', 'verified'];
+const STAGE_ORDER = ['prd', 'ac', 'test', 'impl', 'testing', 'fixing', 'verified', 'completed'];
 
 // Track text-based stage inference to avoid flickering
 let lastTextInferenceTime = 0;
 const TEXT_INFERENCE_DEBOUNCE = 2000;
+
+// ============================================================
+// DIAGNOSTICS - Query session messages API to verify stage signals
+// ============================================================
+async function runDiagnostics() {
+  if (!state.sessionId) {
+    addEvent('error', 'No active session. Submit a PRD first.');
+    return;
+  }
+
+  addEvent('idle', '--- DIAGNOSTICS START ---');
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.authToken) headers['Authorization'] = state.authToken;
+
+    // Probe correct API path for messages
+    const msgPaths = [
+      `/session/${state.sessionId}/message`,
+      `/session/${state.sessionId}/messages`,
+    ];
+    let messages = [];
+    let msgPath = null;
+
+    for (const p of msgPaths) {
+      try {
+        const probeUrl = new URL(`${state.serverUrl}${p}`);
+        if (state.projectDir) probeUrl.searchParams.set('directory', state.projectDir);
+        const probeResp = await fetch(probeUrl.toString(), { headers, signal: AbortSignal.timeout(5000) });
+        const probeText = await probeResp.text();
+        addEvent('idle', `Probe ${p} => ${probeResp.status}: ${probeText.slice(0, 80)}`);
+        if (probeResp.ok && probeText.startsWith('[') || probeText.startsWith('{"data"')) {
+          const parsed = JSON.parse(probeText);
+          messages = parsed.data || parsed;
+          msgPath = p;
+          break;
+        }
+      } catch(e) {
+        addEvent('idle', `Probe ${p} => ERR: ${e.message.slice(0, 60)}`);
+      }
+    }
+
+    if (!msgPath) {
+      addEvent('error', 'Could not find messages API endpoint');
+      return;
+    }
+
+    addEvent('idle', `Messages endpoint: ${msgPath}, found ${messages.length} messages`);
+
+    // Show raw structure of first few messages for debugging
+    if (messages.length > 0) {
+      const sample = messages.slice(0, 2);
+      for (let i = 0; i < sample.length; i++) {
+        const msg = sample[i];
+        addEvent('idle', `MSG[${i}] role=${msg.role} keys=[${Object.keys(msg).join(',')}]`);
+        if (msg.parts) {
+          for (let j = 0; j < Math.min(msg.parts.length, 3); j++) {
+            const p = msg.parts[j];
+            addEvent('idle', `  part[${j}] type=${p.type} keys=[${Object.keys(p).join(',')}]`);
+            if (p.type === 'tool') {
+              addEvent('idle', `    tool=${p.tool||p.name} state=${JSON.stringify(p.state)?.slice(0,100)}`);
+            }
+          }
+        } else if (msg.content) {
+          addEvent('idle', `  content type=${typeof msg.content} preview=${JSON.stringify(msg.content)?.slice(0,100)}`);
+        }
+      }
+    } else {
+      addEvent('error', 'No messages found in API response');
+    }
+
+    // Also query child sessions
+    const sessionsUrl = new URL(`${state.serverUrl}/session`);
+    if (state.projectDir) sessionsUrl.searchParams.set('directory', state.projectDir);
+    let allSessions = [];
+    try {
+      const sessionsResp = await fetch(sessionsUrl.toString(), { headers, signal: AbortSignal.timeout(5000) });
+      if (sessionsResp.ok) {
+        const sessionsText = await sessionsResp.text();
+        addEvent('idle', `Sessions API raw: ${sessionsText.slice(0, 200)}`);
+        const sessionsData = JSON.parse(sessionsText);
+        allSessions = sessionsData.data || sessionsData || [];
+      } else {
+        addEvent('error', `Sessions API failed: ${sessionsResp.status}`);
+      }
+    } catch(e) {
+      addEvent('error', `Sessions API error: ${e.message.slice(0, 80)}`);
+    }
+
+    // Show all sessions for debugging
+    addEvent('idle', `Total sessions: ${allSessions.length}`);
+    for (const s of allSessions.slice(0, 15)) {
+      const keys = Object.keys(s).join(',');
+      addEvent('idle', `  SESSION: ${s.id?.slice(0,12)} keys=[${keys}] title=${(s.title||'')?.slice(0,40)}`);
+    }
+
+    // Detect child sessions - try multiple field names and also match by title pattern
+    const childSessions = allSessions.filter(s => {
+      const parentId = s.parent_id || s.parentID || s.parentId;
+      if (parentId === state.sessionId) return true;
+      // Also check if title contains "subagent" and was created around the same time
+      return false;
+    });
+
+    // If no children found by parent_id, try finding sessions with matching title patterns
+    const subagentSessions = childSessions.length === 0
+      ? allSessions.filter(s => s.id !== state.sessionId && (s.title?.includes('subagent') || s.title?.includes('@')))
+      : childSessions;
+
+    if (childSessions.length === 0 && subagentSessions.length > 0) {
+      addEvent('idle', `No children by parent_id, but found ${subagentSessions.length} possible subagent sessions by title`);
+      for (const s of subagentSessions.slice(0, 5)) {
+        addEvent('idle', `  SUBAGENT: ${s.id?.slice(0,12)} title=${(s.title||'')?.slice(0,60)}`);
+      }
+    }
+
+    const sessionsToQuery = [state.sessionId, ...subagentSessions.map(s => s.id)];
+
+    // Collect all tool calls from main + child sessions
+    const toolCalls = [];
+    const stageMap = {
+      'prd-to-acceptance': 'AC_GENERATED',
+      'test-generation': 'TEST_GENERATED',
+      'tdd-verification': 'VERIFIED',
+      'failure-analysis': 'FIXING',
+      'requirement-diagnosis': 'FIXING',
+    };
+
+    for (const msg of messages) {
+      if (msg.role === 'user') continue;
+      const parts = msg.parts || msg.content || [];
+      for (const part of parts) {
+        if (part.type === 'tool') {
+          const toolName = part.tool || part.name || 'unknown';
+          const status = part.state?.status;
+          const input = part.state?.input;
+          const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
+          let inferredStage = 'N/A';
+
+          if (toolName === 'skill' || toolName === 'slashcommand') {
+            for (const [key, mapped] of Object.entries(stageMap)) {
+              if (inputStr.includes(key)) { inferredStage = mapped; break; }
+            }
+          } else if (toolName === 'test_runner' || toolName === 'test-runner') {
+            inferredStage = 'TESTING';
+          } else if (['write', 'edit', 'hashline-edit'].includes(toolName)) {
+            inferredStage = 'IMPLEMENTING';
+          } else if (['bash', 'shell'].includes(toolName)) {
+            inferredStage = inputStr.includes('pytest') || inputStr.includes('npm test') || inputStr.includes('bun test') ? 'TESTING' : 'IMPLEMENTING';
+          } else if (toolName === 'delegate-task') {
+            inferredStage = 'VERIFIED';
+          }
+
+          toolCalls.push({ toolName, status, inferredStage, inputPreview: inputStr.slice(0, 80) });
+        }
+      }
+    }
+
+    // Query messages for all related sessions (subagents)
+    for (const sid of sessionsToQuery.slice(1)) {
+      try {
+        const childUrl = new URL(`${state.serverUrl}/session/${sid}/message`);
+        if (state.projectDir) childUrl.searchParams.set('directory', state.projectDir);
+        const childResp = await fetch(childUrl.toString(), { headers, signal: AbortSignal.timeout(5000) });
+        if (!childResp.ok) continue;
+        const childText = await childResp.text();
+        const childData = JSON.parse(childText);
+        const childMsgs = childData.data || childData;
+
+        for (const msg of childMsgs) {
+          if (msg.role === 'user') continue;
+          const parts = msg.parts || msg.content || [];
+          for (const part of parts) {
+            if (part.type === 'tool') {
+              const toolName = part.tool || part.name || 'unknown';
+              const status = part.state?.status;
+              const input = part.state?.input;
+              const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
+              let inferredStage = 'N/A';
+
+              if (toolName === 'skill') {
+                for (const [key, mapped] of Object.entries(stageMap)) {
+                  if (inputStr.includes(key)) { inferredStage = mapped; break; }
+                }
+              } else if (toolName === 'test_runner' || toolName === 'test-runner') {
+                inferredStage = 'TESTING';
+              } else if (['write', 'edit', 'hashline-edit'].includes(toolName)) {
+                inferredStage = 'IMPLEMENTING';
+              } else if (['bash', 'shell'].includes(toolName)) {
+                inferredStage = inputStr.includes('pytest') || inputStr.includes('npm test') || inputStr.includes('bun test') ? 'TESTING' : 'IMPLEMENTING';
+              } else if (toolName === 'delegate-task') {
+                inferredStage = 'VERIFIED';
+              }
+
+              toolCalls.push({ toolName, status, inferredStage, inputPreview: `[sub:${sid.slice(0,8)}] ` + inputStr.slice(0, 60) });
+            }
+          }
+        }
+      } catch(e) {
+        addEvent('idle', `  Sub-session ${sid.slice(0,12)} query failed: ${e.message.slice(0,60)}`);
+      }
+    }
+
+    addEvent('idle', `Total tool calls found: ${toolCalls.length}`);
+
+    // Stage coverage report
+    const stages = ['AC_GENERATED', 'TEST_GENERATED', 'IMPLEMENTING', 'TESTING', 'VERIFIED', 'COMPLETED'];
+    const covered = new Set(toolCalls.filter(t => t.inferredStage !== 'N/A').map(t => t.inferredStage));
+    addEvent('idle', `Stage coverage: ${covered.size}/${stages.length} [${[...covered].join(', ')}]`);
+    const missing = stages.filter(s => !covered.has(s));
+    if (missing.length) {
+      addEvent('error', `Missing stages: ${missing.join(', ')}`);
+    }
+
+    // List all tool calls
+    for (const tc of toolCalls) {
+      addEvent('idle', `  TOOL: ${tc.toolName} [${tc.status}] → ${tc.inferredStage} | ${tc.inputPreview}`);
+    }
+
+    addEvent('idle', '--- DIAGNOSTICS END ---');
+  } catch (err) {
+    addEvent('error', `Diagnostics failed: ${err.message}`);
+  }
+}
 
 function inferStageFromTool(toolName, input) {
   const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
@@ -1486,6 +1804,17 @@ function inferStageFromTool(toolName, input) {
       // Shell command after test generation = likely implementing
       setStage('impl');
     }
+  } else if (toolName === 'delegate-task') {
+    // delegate-task creates subagents - infer stage from the task description
+    const desc = inputStr.toLowerCase();
+    if (desc.includes('oracle') || desc.includes('cross-validation') || desc.includes('verification')) {
+      setStage('verified');
+    } else if (desc.includes('review') || desc.includes('momus')) {
+      // Review is part of the testing/fixing cycle
+      if (state.currentStage === 'testing') {
+        setStage('fixing');
+      }
+    }
   } else if (toolName === 'write' || toolName === 'edit' || toolName === 'hashline-edit') {
     if (state.lastTestFailed) {
       setStage('fixing');
@@ -1502,6 +1831,22 @@ function inferStageFromTool(toolName, input) {
 
 function inferStageFromToolResult(toolName, output) {
   const outputStr = String(output || '');
+
+  // Check for delegate-task results (subagent completions)
+  if (toolName === 'delegate-task') {
+    const lower = outputStr.toLowerCase();
+    if (lower.includes('verified') || lower.includes('verification complete') ||
+        lower.includes('all tests pass') || lower.includes('cross-validation passed')) {
+      setStage('verified');
+    } else if (lower.includes('fix') || lower.includes('issue found') || lower.includes('not verified')) {
+      setStage('fixing');
+    }
+  }
+
+  // When tdd-verification skill completes, advance to completed
+  if (toolName === 'skill' && state.currentStage === 'verified') {
+    setStage('completed');
+  }
 
   // Check for test results
   if (toolName === 'test_runner' || toolName === 'test-runner' ||
@@ -1598,6 +1943,16 @@ function inferStageFromText(text) {
         lower.includes('four-layer verification') || lower.includes('closed-loop verified')) {
       lastTextInferenceTime = now;
       setStage('verified');
+      return;
+    }
+  }
+
+  // Completed stage: after verification, when session goes idle
+  if (currentIdx < STAGE_ORDER.indexOf('completed') && state.currentStage === 'verified') {
+    if (lower.includes('session idle') || lower.includes('task complete') ||
+        lower.includes('all done') || lower.includes('process finished')) {
+      lastTextInferenceTime = now;
+      setStage('completed');
       return;
     }
   }
