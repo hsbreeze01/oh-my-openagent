@@ -276,7 +276,6 @@
 
   /* Agent Info */
   .agent-info {
-    margin-top: auto;
     padding: 16px 20px;
     border-top: 1px solid var(--border);
   }
@@ -301,6 +300,91 @@
     font-size: 11px;
     color: var(--text-secondary);
     margin-top: 2px;
+  }
+
+  /* Verification Panel */
+  .verification-panel {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .verification-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  .verification-layers { display: flex; flex-direction: column; gap: 6px; }
+  .v-layer {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 6px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    transition: all 0.3s;
+  }
+  .v-layer.active { border-color: var(--accent-blue); background: var(--glow-blue); }
+  .v-layer.passed { border-color: var(--accent-green); }
+  .v-layer.passed .v-layer-icon { color: var(--accent-green); }
+  .v-layer.failed { border-color: var(--accent-red); }
+  .v-layer-icon { font-size: 14px; color: var(--text-muted); min-width: 18px; text-align: center; }
+  .v-layer-info { flex: 1; min-width: 0; }
+  .v-layer-name { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .v-layer-desc { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Acceptance Report */
+  .acceptance-panel {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+  .acceptance-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .acceptance-status {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .acceptance-status.accepted { background: var(--glow-green); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3); }
+  .acceptance-status.rejected { background: var(--glow-red); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.3); }
+  .acceptance-details {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* Enhanced tool display in event log */
+  .event-item.tool-call .tool-detail {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    padding-left: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .event-item.tool-result {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-left: 12px;
+    max-height: 60px;
+    overflow: hidden;
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 
   /* === CENTER: EVENT LOG === */
@@ -814,6 +898,46 @@
       <div class="agent-name" id="agentName">—</div>
       <div class="agent-model" id="agentModel">—</div>
     </div>
+    <!-- VERIFICATION LAYERS PANEL -->
+    <div class="verification-panel" id="verificationPanel" style="display:none">
+      <div class="verification-title">Four-Layer Verification</div>
+      <div class="verification-layers">
+        <div class="v-layer" id="vLayer1" data-layer="1">
+          <div class="v-layer-icon">①</div>
+          <div class="v-layer-info">
+            <div class="v-layer-name">PRD ↔ AC</div>
+            <div class="v-layer-desc" id="vLayer1Desc">Traceability</div>
+          </div>
+        </div>
+        <div class="v-layer" id="vLayer2" data-layer="2">
+          <div class="v-layer-icon">②</div>
+          <div class="v-layer-info">
+            <div class="v-layer-name">AC ↔ Test</div>
+            <div class="v-layer-desc" id="vLayer2Desc">Coverage</div>
+          </div>
+        </div>
+        <div class="v-layer" id="vLayer3" data-layer="3">
+          <div class="v-layer-icon">③</div>
+          <div class="v-layer-info">
+            <div class="v-layer-name">AC ↔ Impl</div>
+            <div class="v-layer-desc" id="vLayer3Desc">Implementation</div>
+          </div>
+        </div>
+        <div class="v-layer" id="vLayer4" data-layer="4">
+          <div class="v-layer-icon">④</div>
+          <div class="v-layer-info">
+            <div class="v-layer-name">Oracle</div>
+            <div class="v-layer-desc" id="vLayer4Desc">Cross-validation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ACCEPTANCE REPORT PANEL -->
+    <div class="acceptance-panel" id="acceptancePanel" style="display:none">
+      <div class="acceptance-title">Acceptance Report</div>
+      <div class="acceptance-status" id="acceptanceStatus">—</div>
+      <div class="acceptance-details" id="acceptanceDetails"></div>
+    </div>
   </aside>
 
   <!-- CENTER: EVENT LOG -->
@@ -884,7 +1008,7 @@
 const state = {
   serverUrl: localStorage.getItem('tdd_server_url') || 'http://127.0.0.1:8080',
   projectDir: localStorage.getItem('tdd_project_dir') || '',
-  authToken: localStorage.getItem('tdd_auth_token') || '',
+  authToken: sessionStorage.getItem('tdd_auth_token') || '',
   modelProvider: localStorage.getItem('tdd_model_provider') || 'zhipuai',
   modelId: localStorage.getItem('tdd_model_id') || 'glm-5.1',
   sessionId: null,
@@ -992,7 +1116,7 @@ function saveSettings() {
 
   localStorage.setItem('tdd_server_url', state.serverUrl);
   localStorage.setItem('tdd_project_dir', state.projectDir);
-  localStorage.setItem('tdd_auth_token', state.authToken);
+  sessionStorage.setItem('tdd_auth_token', state.authToken);
   localStorage.setItem('tdd_model_provider', state.modelProvider);
   localStorage.setItem('tdd_model_id', state.modelId);
 
@@ -1062,7 +1186,7 @@ async function submitPRD() {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: { id: state.modelId, providerID: state.modelProvider, variant: 'default' },
+        model: { id: state.modelId, providerID: state.modelProvider },
       }),
     });
 
@@ -1103,7 +1227,7 @@ ${prdContent}
       headers,
       body: JSON.stringify({
         parts: [{ type: 'text', text: tddPrompt }],
-        model: { modelID: state.modelId, providerID: state.modelProvider, variant: 'default' },
+        model: { modelID: state.modelId, providerID: state.modelProvider },
       }),
     });
 
@@ -1141,6 +1265,35 @@ function subscribeEvents() {
   fetchSSE(url.toString());
 }
 
+// Recover missed stage transitions by querying session messages after reconnect
+async function recoverMissedStages() {
+  if (!state.sessionId) return;
+  const headers = { 'Content-Type': 'application/json' };
+  if (state.authToken) headers['Authorization'] = state.authToken;
+  try {
+    const resp = await fetch(`${state.serverUrl}/session/${state.sessionId}/message`, {
+      headers, signal: AbortSignal.timeout(5000)
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const messages = data.data || data;
+    for (const msg of messages) {
+      if (msg.role === 'user') continue;
+      for (const part of (msg.parts || [])) {
+        if (part.type === 'tool') {
+          const toolName = part.tool || part.name || '';
+          const input = part.state?.input;
+          const output = part.state?.output || '';
+          if (part.state?.status === 'completed' || part.state?.status === 'running') {
+            inferStageFromTool(toolName, input);
+            if (output) inferStageFromToolResult(toolName, output);
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
 async function fetchSSE(url) {
   const headers = {};
   if (state.authToken) headers['Authorization'] = state.authToken;
@@ -1174,14 +1327,20 @@ async function fetchSSE(url) {
       }
     }
 
-    // Stream ended normally - reconnect after delay
+    // Stream ended - reconnect and recover missed events
     setConnected(false);
     addEvent('idle', 'SSE stream ended, reconnecting in 3s...');
-    setTimeout(() => fetchSSE(url), 3000);
+    setTimeout(async () => {
+      await recoverMissedStages();
+      fetchSSE(url);
+    }, 3000);
   } catch (err) {
     setConnected(false);
     addEvent('error', `SSE error: ${err.message}, retrying in 5s...`);
-    setTimeout(() => fetchSSE(url), 5000);
+    setTimeout(async () => {
+      await recoverMissedStages();
+      fetchSSE(url);
+    }, 5000);
   }
 }
 
@@ -1190,6 +1349,8 @@ async function fetchSSE(url) {
 // ============================================================
 // Cache of sessionIDs that are known to NOT be child sessions (to avoid repeated API calls)
 const nonChildSessionIds = new Set();
+// Buffer events per unknown session while checking parentage; maps sid → payload[]
+const pendingChildChecks = new Map(); // sid → { checking: bool, queue: payload[] }
 
 // Async check: is this session a child of our parent session?
 async function checkIsChildSession(sid) {
@@ -1205,7 +1366,6 @@ async function checkIsChildSession(sid) {
     const data = await resp.json();
     const session = data.data || data;
     const parentId = session.parentID || session.parent_id || session.parentId;
-    console.log('[TDD] checkIsChildSession:', sid, 'parentId:', parentId, 'expected:', state.parentSessionId, 'keys:', Object.keys(session).join(','));
     if (parentId === state.parentSessionId) {
       state.childSessionIds.add(sid);
       const title = session.title || 'unknown subagent';
@@ -1219,35 +1379,45 @@ async function checkIsChildSession(sid) {
   }
 }
 
+function extractSessionId(payload) {
+  const props = payload.properties || {};
+  let sid = props?.sessionID ?? props?.sessionId;
+  if (!sid && props?.info) sid = props.info.sessionID ?? props.info.sessionId;
+  if (!sid && props?.part) sid = props.part.sessionID ?? props.part.sessionId;
+  return sid;
+}
+
 function handleEvent(payload) {
   if (!payload?.type) return;
 
-  const props = payload.properties || {};
-
   // Filter events by session ID (except global events)
-  // Allow events from parent session AND any child (subagent) sessions
   const globalTypes = ['server.connected', 'server.heartbeat'];
   if (!globalTypes.includes(payload.type)) {
-    // Try to get sessionID from multiple locations (matching opencode SDK's getSessionID)
-    let sid = props?.sessionID ?? props?.sessionId;
-    if (!sid && props?.info) {
-      sid = props.info.sessionID ?? props.info.sessionId;
-    }
-    if (!sid && props?.part) {
-      sid = props.part.sessionID ?? props.part.sessionId;
-    }
+    const sid = extractSessionId(payload);
 
     if (sid && state.parentSessionId && sid !== state.parentSessionId && !state.childSessionIds.has(sid)) {
-      // Also check nonChildSessionIds to avoid repeated API calls
       if (nonChildSessionIds.has(sid)) return;
 
-      // Unknown session - check async if it's a child, and buffer the event
-      checkIsChildSession(sid).then(isChild => {
-        if (isChild) {
-          processEvent(payload);
-        }
-      });
-      return; // Don't process yet - will be re-processed if it's a child
+      // Buffer events for this unknown session and check only once
+      let entry = pendingChildChecks.get(sid);
+      if (!entry) {
+        entry = { checking: false, queue: [] };
+        pendingChildChecks.set(sid, entry);
+      }
+      entry.queue.push(payload);
+
+      if (!entry.checking) {
+        entry.checking = true;
+        checkIsChildSession(sid).then(isChild => {
+          const buffered = entry.queue;
+          pendingChildChecks.delete(sid);
+          if (isChild) {
+            // Process buffered events in order
+            for (const evt of buffered) processEvent(evt);
+          }
+        });
+      }
+      return;
     }
   }
 
@@ -1411,7 +1581,7 @@ function handleMessageUpdated(props) {
 
 function handleMessagePartUpdated(props) {
   const part = props?.part;
-  if (!part) return;
+  if (!part || typeof part !== 'object') return;
 
   // Session filtering is already handled in handleEvent/processEvent
   // No need to re-filter here
@@ -1437,7 +1607,7 @@ function handleMessagePartUpdated(props) {
     state.inThinkBlock = false;
     if (part.tokens) {
       const t = part.tokens;
-      addEvent('idle', `Step done: ${t.input}in/${t.output}out tokens, $${(part.cost || 0).toFixed(4)}`);
+      addEvent('idle', `Step done: ${t.input || 0}in/${t.output || 0}out tokens, $${(part.cost || 0).toFixed(4)}`);
     }
     return;
   }
@@ -1461,6 +1631,8 @@ function handleMessagePartUpdated(props) {
       state.lastPartText = part.text;
       // Stage inference from text content
       inferStageFromText(part.text);
+      // Acceptance report detection
+      inferAcceptanceReport(part.text);
     }
   }
 
@@ -1474,19 +1646,19 @@ function handleMessagePartUpdated(props) {
       state.currentTool = toolName;
       // Stage inference from tool execution
       inferStageFromTool(toolName, input);
+      // Verification layer inference
+      inferVerificationLayer(toolName, input, '');
     }
 
     if (status === 'completed' || status === 'error') {
       const output = part.state?.output || '';
-      if (output.trim()) {
+      if (typeof output === 'string' && output.trim()) {
         addEvent('tool-result', output);
       }
       // Stage inference from tool result
-      inferStageFromToolResult(toolName, output);
-      // Fallback: also try to infer stage from input if we missed the running event
-      if (input && state.currentStage) {
-        inferStageFromTool(toolName, input);
-      }
+      inferStageFromToolResult(toolName, typeof output === 'string' ? output : JSON.stringify(output));
+      // Verification layer inference
+      inferVerificationFromResult(toolName, output);
       state.currentTool = null;
       state.lastPartText = '';
     }
@@ -1711,13 +1883,14 @@ async function runDiagnostics() {
       }
     }
 
-    // Query messages for all related sessions (subagents)
-    for (const sid of sessionsToQuery.slice(1)) {
+    // Query messages for all related sessions (subagents) in parallel
+    const childResults = await Promise.all(sessionsToQuery.slice(1).map(async (sid) => {
+      const results = [];
       try {
         const childUrl = new URL(`${state.serverUrl}/session/${sid}/message`);
         if (state.projectDir) childUrl.searchParams.set('directory', state.projectDir);
         const childResp = await fetch(childUrl.toString(), { headers, signal: AbortSignal.timeout(5000) });
-        if (!childResp.ok) continue;
+        if (!childResp.ok) return results;
         const childText = await childResp.text();
         const childData = JSON.parse(childText);
         const childMsgs = childData.data || childData;
@@ -1747,13 +1920,18 @@ async function runDiagnostics() {
                 inferredStage = 'VERIFIED';
               }
 
-              toolCalls.push({ toolName, status, inferredStage, inputPreview: `[sub:${sid.slice(0,8)}] ` + inputStr.slice(0, 60) });
+              results.push({ toolName, status, inferredStage, inputPreview: `[sub:${sid.slice(0,8)}] ` + inputStr.slice(0, 60) });
             }
           }
         }
       } catch(e) {
         addEvent('idle', `  Sub-session ${sid.slice(0,12)} query failed: ${e.message.slice(0,60)}`);
       }
+      return results;
+    }));
+
+    for (const batch of childResults) {
+      toolCalls.push(...batch);
     }
 
     addEvent('idle', `Total tool calls found: ${toolCalls.length}`);
@@ -2091,24 +2269,54 @@ function addStageDivider(stage) {
 function addToolCallEvent(toolName, input) {
   const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
   let display = toolName;
+  let detail = '';
 
-  // Extract meaningful description from input
   if (toolName === 'read' || toolName === 'grep' || toolName === 'glob') {
-    const path = input?.path || input?.pattern || input?.query || '';
-    if (path) display = `${toolName} ${path}`;
-  } else if (toolName === 'write' || toolName === 'edit') {
-    const path = input?.path || input?.file_path || '';
-    if (path) display = `${toolName} ${path}`;
+    const path = input?.path || input?.filePath || input?.pattern || input?.query || '';
+    const shortPath = path.split('/').slice(-2).join('/');
+    display = `${toolName} ${shortPath || path}`;
+  } else if (toolName === 'write' || toolName === 'edit' || toolName === 'hashline-edit') {
+    const path = input?.path || input?.filePath || input?.file_path || '';
+    const shortPath = path.split('/').slice(-2).join('/');
+    display = `write → ${shortPath || path}`;
+    if (input?.content) detail = input.content.slice(0, 80).replace(/\n/g, ' ');
+  } else if (toolName === 'bash' || toolName === 'shell' || toolName === 'terminal') {
+    const cmd = input?.command || '';
+    const desc = input?.description || '';
+    display = desc ? `bash: ${desc}` : `bash`;
+    detail = cmd.slice(0, 120);
   } else if (toolName === 'skill' || toolName === 'slashcommand') {
     const skillName = input?.name || input?.skill || '';
-    if (skillName) display = `Skill "${skillName}"`;
+    display = skillName ? `/${skillName}` : 'skill';
+    if (input?.user_message) detail = input.user_message.slice(0, 100).replace(/\n/g, ' ');
   } else if (toolName === 'test_runner' || toolName === 'test-runner') {
-    display = 'test_runner';
-  } else if (toolName === 'delegate-task') {
-    display = 'delegate-task';
+    const fw = input?.framework || 'auto';
+    const acs = input?.acceptance_criteria;
+    display = `test_runner (${fw})`;
+    if (acs && Array.isArray(acs)) detail = `Verifying: ${acs.join(', ')}`;
+  } else if (toolName === 'task' || toolName === 'delegate-task') {
+    const agent = input?.subagent_type || 'subagent';
+    const desc = input?.description || '';
+    display = `⟶ ${agent}: ${desc.slice(0, 40)}`;
   }
 
-  addEvent('tool-call', display);
+  const log = document.getElementById('eventLog');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = 'event-item tool-call';
+  el.dataset.eventType = 'tool-call';
+
+  const stageLabel = state.currentStage ? getStageLabel(state.currentStage) : null;
+  let html = '';
+  if (stageLabel) html += `<span class="stage-badge badge-${state.currentStage}">${stageLabel}</span>`;
+  html += `<span class="arrow">→</span><span>${escapeHtml(display)}</span>`;
+  if (detail) html += `<span class="tool-detail">${escapeHtml(detail)}</span>`;
+  el.innerHTML = html;
+
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
 }
 
 function appendToLastTextEvent(delta) {
@@ -2119,6 +2327,131 @@ function appendToLastTextEvent(delta) {
     log.scrollTop = log.scrollHeight;
   } else {
     addEvent('text-output', delta);
+  }
+}
+
+// ============================================================
+// VERIFICATION LAYERS & ACCEPTANCE REPORT
+// ============================================================
+const verificationState = { currentLayer: 0, layers: [false, false, false, false], oracleResult: null, report: null };
+
+function showVerificationPanel() {
+  document.getElementById('verificationPanel').style.display = '';
+}
+
+function setVerificationLayer(layer, status, desc) {
+  showVerificationPanel();
+  const el = document.getElementById(`vLayer${layer}`);
+  if (!el) return;
+  el.classList.remove('active', 'passed', 'failed');
+  if (status === 'active') el.classList.add('active');
+  else if (status === 'passed') { el.classList.add('passed'); verificationState.layers[layer - 1] = true; }
+  else if (status === 'failed') el.classList.add('failed');
+  if (desc) document.getElementById(`vLayer${layer}Desc`).textContent = desc;
+}
+
+function inferVerificationLayer(toolName, input, output) {
+  if (state.currentStage !== 'verified' && state.currentStage !== 'completed') return;
+  const inputStr = typeof input === 'object' ? JSON.stringify(input) : String(input || '');
+  const outputStr = String(output || '');
+
+  // Layer 1: PRD↔AC traceability (grep/bash scanning for AC annotations)
+  if (!verificationState.layers[0]) {
+    if ((toolName === 'bash' || toolName === 'grep') && inputStr.includes('AC-')) {
+      setVerificationLayer(1, 'active', 'Scanning...');
+      if (outputStr.includes('AC-')) setVerificationLayer(1, 'passed', 'PRD↔AC traced');
+      return;
+    }
+  }
+
+  // Layer 2: AC↔Test coverage (read test files)
+  if (verificationState.layers[0] && !verificationState.layers[1]) {
+    if (toolName === 'read' && (inputStr.includes('test_') || inputStr.includes('test.'))) {
+      setVerificationLayer(2, 'active', 'Checking tests...');
+      return;
+    }
+    if (toolName === 'bash' && (inputStr.includes('grep') && inputStr.includes('test'))) {
+      setVerificationLayer(2, 'passed', 'AC↔Test covered');
+      return;
+    }
+    // Auto-advance if we see layer 3 signals
+    if (toolName === 'read' && !inputStr.includes('test')) {
+      setVerificationLayer(2, 'passed', 'AC↔Test covered');
+    }
+  }
+
+  // Layer 3: AC↔Implementation (read source files)
+  if (verificationState.layers[1] && !verificationState.layers[2]) {
+    if (toolName === 'read' && !inputStr.includes('test')) {
+      setVerificationLayer(3, 'active', 'Verifying impl...');
+      return;
+    }
+  }
+
+  // Layer 4: Oracle cross-validation (task/delegate-task with oracle)
+  if ((toolName === 'task' || toolName === 'delegate-task') && inputStr.includes('oracle')) {
+    if (!verificationState.layers[2]) setVerificationLayer(3, 'passed', 'AC↔Impl verified');
+    setVerificationLayer(4, 'active', 'Oracle running...');
+    return;
+  }
+}
+
+function inferVerificationFromResult(toolName, output) {
+  if (state.currentStage !== 'verified' && state.currentStage !== 'completed') return;
+  const outputStr = String(output || '').toLowerCase();
+
+  // Layer 1 result
+  if (!verificationState.layers[0] && outputStr.includes('ac-')) {
+    setVerificationLayer(1, 'passed', 'PRD↔AC traced');
+  }
+
+  // Layer 2 result
+  if (verificationState.layers[0] && !verificationState.layers[1] &&
+      (outputStr.includes('test_') || outputStr.includes('coverage'))) {
+    setVerificationLayer(2, 'passed', 'AC↔Test covered');
+  }
+
+  // Layer 3 result
+  if (verificationState.layers[1] && !verificationState.layers[2] &&
+      (toolName === 'read' || outputStr.includes('def ') || outputStr.includes('function'))) {
+    setVerificationLayer(3, 'passed', 'AC↔Impl verified');
+  }
+
+  // Oracle result
+  if ((toolName === 'task' || toolName === 'delegate-task') && outputStr.includes('verified')) {
+    setVerificationLayer(4, 'passed', 'VERIFIED ✓');
+    verificationState.oracleResult = 'VERIFIED';
+  } else if ((toolName === 'task' || toolName === 'delegate-task') && outputStr.includes('not_verified')) {
+    setVerificationLayer(4, 'failed', 'NOT VERIFIED');
+    verificationState.oracleResult = 'NOT_VERIFIED';
+  }
+}
+
+function inferAcceptanceReport(text) {
+  if (!text) return;
+  const lower = text.toLowerCase();
+  // Detect acceptance report in text output
+  if (lower.includes('acceptance_report') || lower.includes('status: accepted') || lower.includes('status: rejected')) {
+    const panel = document.getElementById('acceptancePanel');
+    const statusEl = document.getElementById('acceptanceStatus');
+    const detailsEl = document.getElementById('acceptanceDetails');
+    panel.style.display = '';
+
+    const accepted = lower.includes('status: accepted') || lower.includes('accepted');
+    statusEl.textContent = accepted ? '✓ ACCEPTED' : '✗ REJECTED';
+    statusEl.className = 'acceptance-status ' + (accepted ? 'accepted' : 'rejected');
+
+    // Extract metrics
+    const metrics = [];
+    const prdMatch = text.match(/prd_coverage[:\s]*"?([^"\n]+)/i);
+    const testMatch = text.match(/ac_test_coverage[:\s]*"?([^"\n]+)/i);
+    const implMatch = text.match(/ac_implementation_coverage[:\s]*"?([^"\n]+)/i);
+    const passMatch = text.match(/test_pass_rate[:\s]*"?([^"\n]+)/i);
+    if (prdMatch) metrics.push(`PRD: ${prdMatch[1].trim()}`);
+    if (testMatch) metrics.push(`Test: ${testMatch[1].trim()}`);
+    if (implMatch) metrics.push(`Impl: ${implMatch[1].trim()}`);
+    if (passMatch) metrics.push(`Pass: ${passMatch[1].trim()}`);
+    if (metrics.length) detailsEl.textContent = metrics.join('\n');
   }
 }
 
