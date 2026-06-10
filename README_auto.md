@@ -4,12 +4,12 @@
 
 | 项目 | 值 |
 |------|-----|
-| 服务器 | d-qcsh5-nacos-register-76ef6952-02 (10.132.108.68) |
+| 服务器 | d-qcsh5-nacos-register-76ef6952-02 (<HOST_IP>) |
 | 容器名 | opencode-serve |
 | 端口 | 3001 |
 | LLM | 智谱AI glm-5.1 (`https://open.bigmodel.cn/api/coding/paas/v4`) |
 | 代理 | `proxy.nioint.com:8080` |
-| Dashboard | `http://10.132.108.68:8080/tdd-dashboard.html` |
+| Dashboard | `http://<HOST_IP>:8080/tdd-dashboard.html` |
 
 ## 已解决的问题
 
