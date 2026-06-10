@@ -43,6 +43,42 @@ Each skill follows the standard layout (`SKILL.md` + optional `scripts/`, `refer
 - **Trigger words** in the skill description determine when OpenCode loads the skill. Be specific.
 - **Commands are user-visible.** Name them with a leading `/` (the loader normalizes filename → command).
 
+## TDD PIPELINE (4 skills, self-orchestrating)
+
+When a PRD is submitted (via Dashboard or direct prompt), execute the full TDD pipeline automatically without asking the user. The pipeline is deterministic and self-looping:
+
+```
+PRD → [prd-to-acceptance] → acceptance-criteria.md
+    → [test-generation]   → tests/ (all failing = RED)
+    → [tdd-implementation] → src/ (iterate until GREEN)
+    → [tdd-verification]  → PASS? → Done
+                            → FAIL? → loop back to tdd-implementation
+```
+
+### Pipeline Skills
+
+| Skill | Phase | Input | Output |
+|-------|-------|-------|--------|
+| `prd-to-acceptance/` | 1 — AC | PRD markdown | `acceptance-criteria.md` |
+| `test-generation/` | 2 — Red | `acceptance-criteria.md` | `tests/*.test.ts` (all failing) |
+| `tdd-implementation/` | 3 — Green | Failing tests | `src/` implementation (all passing) |
+| `tdd-verification/` | 4 — Verify | Tests + AC + code | PASS or loop back |
+
+### Orchestration Rules
+
+1. **No human confirmation between phases** — pipeline runs end-to-end autonomously
+2. **Each skill invokes the next** — output of one phase is input to the next
+3. **Verification loop is unbounded** — keep iterating until all gates pass
+4. **On PRD submission, always start with `prd-to-acceptance`** — do not ask "should I use TDD?"
+5. **Work in the target project directory** — the directory passed via SSE `?directory=` parameter
+
+### Triggers
+
+The pipeline activates when:
+- A PRD is pasted/submitted via Dashboard
+- User says "start TDD", "run TDD pipeline", "implement this PRD"
+- The `?directory=` parameter indicates a target project workspace
+
 ## ANTI-PATTERNS
 
 - Never duplicate a built-in skill from `src/features/builtin-skills/` here without a clear reason.
