@@ -8,7 +8,7 @@
 | 容器名 | opencode-serve |
 | 端口 | 3001 |
 | LLM | 智谱AI glm-5.1 (`https://open.bigmodel.cn/api/coding/paas/v4`) |
-| 代理 | `proxy.nioint.com:8080` |
+| 代理 | `proxy.<DOMAIN>:8080` |
 | Dashboard | `http://<HOST_IP>:8080/tdd-dashboard.html` |
 
 ## 已解决的问题
@@ -21,8 +21,8 @@
 
 **修复**：启动容器时传入代理环境变量：
 ```bash
--e http_proxy=http://proxy.nioint.com:8080
--e https_proxy=http://proxy.nioint.com:8080
+-e http_proxy=http://proxy.<DOMAIN>:8080
+-e https_proxy=http://proxy.<DOMAIN>:8080
 -e no_proxy=localhost,127.0.0.1
 ```
 
@@ -45,8 +45,8 @@
 
 **修复**：用代理参数重新构建镜像：
 ```bash
-docker build --build-arg http_proxy=http://proxy.nioint.com:8080 \
-  --build-arg https_proxy=http://proxy.nioint.com:8080 \
+docker build --build-arg http_proxy=http://proxy.<DOMAIN>:8080 \
+  --build-arg https_proxy=http://proxy.<DOMAIN>:8080 \
   -t opencode-serve /home/lancer.zhang/opencode-docker/
 ```
 
@@ -94,8 +94,8 @@ sudo docker run -d \
   --name opencode-serve \
   --restart unless-stopped \
   -p 3001:3001 \
-  -e http_proxy=http://proxy.nioint.com:8080 \
-  -e https_proxy=http://proxy.nioint.com:8080 \
+  -e http_proxy=http://proxy.<DOMAIN>:8080 \
+  -e https_proxy=http://proxy.<DOMAIN>:8080 \
   -e no_proxy=localhost,127.0.0.1 \
   -v /home/lancer.zhang/oh-my-openagent:/workspace \
   -v /home/lancer.zhang/proj-demo:/home/lancer.zhang/proj-demo \
