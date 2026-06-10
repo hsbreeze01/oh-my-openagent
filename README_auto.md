@@ -4,7 +4,7 @@
 
 | 项目 | 值 |
 |------|-----|
-| 服务器 | d-qcsh5-nacos-register-76ef6952-02 (<HOST_IP>) |
+| 服务器 | <HOSTNAME> (<HOST_IP>) |
 | 容器名 | opencode-serve |
 | 端口 | 3001 |
 | LLM | 智谱AI glm-5.1 (`https://open.bigmodel.cn/api/coding/paas/v4`) |
@@ -28,13 +28,13 @@
 
 ### 2. 容器内无法访问目标项目目录
 
-**现象**：agent 报 `/home/lancer.zhang/proj-demo` doesn't exist。
+**现象**：agent 报 `/home/<USER>/proj-demo` doesn't exist。
 
-**原因**：Dashboard SSE 传入 `?directory=/home/lancer.zhang/proj-demo`，但容器只挂载了 `/workspace`。
+**原因**：Dashboard SSE 传入 `?directory=/home/<USER>/proj-demo`，但容器只挂载了 `/workspace`。
 
 **修复**：增加 volume mount：
 ```bash
--v /home/lancer.zhang/proj-demo:/home/lancer.zhang/proj-demo
+-v /home/<USER>/proj-demo:/home/<USER>/proj-demo
 ```
 
 ### 3. 容器内缺少 bun 运行时
@@ -47,7 +47,7 @@
 ```bash
 docker build --build-arg http_proxy=http://proxy.<DOMAIN>:8080 \
   --build-arg https_proxy=http://proxy.<DOMAIN>:8080 \
-  -t opencode-serve /home/lancer.zhang/opencode-docker/
+  -t opencode-serve /home/<USER>/opencode-docker/
 ```
 
 ### 4. Agent 不识别 TDD Pipeline Skills
@@ -61,9 +61,9 @@ docker build --build-arg http_proxy=http://proxy.<DOMAIN>:8080 \
 2. 在 `proj-demo/.opencode/` 下创建符号链接指向 workspace skills：
 ```bash
 docker exec opencode-serve bash -c "
-  mkdir -p /home/lancer.zhang/proj-demo/.opencode &&
-  ln -s /workspace/.opencode/skills /home/lancer.zhang/proj-demo/.opencode/skills &&
-  ln -s /workspace/.opencode/AGENTS.md /home/lancer.zhang/proj-demo/.opencode/AGENTS.md
+  mkdir -p /home/<USER>/proj-demo/.opencode &&
+  ln -s /workspace/.opencode/skills /home/<USER>/proj-demo/.opencode/skills &&
+  ln -s /workspace/.opencode/AGENTS.md /home/<USER>/proj-demo/.opencode/AGENTS.md
 "
 ```
 
@@ -97,9 +97,9 @@ sudo docker run -d \
   -e http_proxy=http://proxy.<DOMAIN>:8080 \
   -e https_proxy=http://proxy.<DOMAIN>:8080 \
   -e no_proxy=localhost,127.0.0.1 \
-  -v /home/lancer.zhang/oh-my-openagent:/workspace \
-  -v /home/lancer.zhang/proj-demo:/home/lancer.zhang/proj-demo \
-  -v /home/lancer.zhang/opencode-docker/opencode.json:/root/.config/opencode/opencode.json \
+  -v /home/<USER>/oh-my-openagent:/workspace \
+  -v /home/<USER>/proj-demo:/home/<USER>/proj-demo \
+  -v /home/<USER>/opencode-docker/opencode.json:/root/.config/opencode/opencode.json \
   opencode-serve
 ```
 
