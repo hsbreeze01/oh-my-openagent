@@ -77,6 +77,27 @@ bun run typecheck 2>/dev/null || npx tsc --noEmit 2>/dev/null
 
 ---
 
+## Gate 4: Oracle Cross-Validation
+
+After Gates 1-3 pass, run an independent oracle verification using `task` tool. This is a cross-validation step where a separate agent re-checks the implementation against the PRD independently.
+
+**You MUST use the `task` tool** (or `delegate-task`) with the word "oracle" in the description:
+
+```
+task(description="oracle cross-validation: verify implementation satisfies PRD acceptance criteria independently", ...)
+```
+
+The oracle agent should:
+1. Re-read the PRD and acceptance-criteria.md
+2. Read the implementation source
+3. Confirm each AC is satisfied by the code
+4. Output "verified" if all checks pass, or "not_verified" with reasons
+
+If oracle returns "verified" → proceed to completion.
+If oracle returns "not_verified" → loop back to tdd-implementation.
+
+---
+
 ## Verification PASSED
 
 When all gates pass, emit these EXACT keywords (Dashboard stage detection depends on them):
