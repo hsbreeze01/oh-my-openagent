@@ -79,15 +79,15 @@ bun run typecheck 2>/dev/null || npx tsc --noEmit 2>/dev/null
 
 ## Verification PASSED
 
-When all gates pass:
+When all gates pass, emit these EXACT keywords (Dashboard stage detection depends on them):
 
 ```
-✅ TDD Cycle Complete
+✅ TDD Verification Complete — closed-loop verified
 📊 Results:
-  - Tests: {N} passing, 0 failing
+  - Tests: {N} passing, 0 failing — all tests pass
   - AC Coverage: {M}/{M} criteria verified
   - Build: clean
-🏁 Status: DONE
+🏁 Status: DONE — task complete, process finished
 ```
 
 ---
